@@ -1,11 +1,11 @@
 const std = @import("std");
-const builtin = @import("builtin");
 
 const rl = @import("raylib");
 const rg = @import("raygui");
 
 const ut = @import("utils.zig");
 const tmx = @import("tmx.zig");
+const input = @import("input.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
@@ -62,15 +62,6 @@ pub fn main(_: std.process.Init) !void {
     };
     var current_dir = dirs.down;
 
-    const joy_radius: f32 = 60;
-    const joy_knob_radius: f32 = 25;
-    var joy_active = false;
-    var joy_touch_id: i32 = -1;
-    var joy_base = rl.Vector2{ .x = 0, .y = 0 };
-    var joy_knob = rl.Vector2{ .x = 0, .y = 0 };
-    var joy_dx: f32 = 0;
-    var joy_dy: f32 = 0;
-
     rl.setTargetFPS(60);
     //--------------------------------------------------------------------------------------
 
@@ -79,73 +70,25 @@ pub fn main(_: std.process.Init) !void {
         // Update
         //----------------------------------------------------------------------------------
 
-        if (comptime builtin.os.tag == .emscripten) {
-            const touch_count = rl.getTouchPointCount();
-            if (!joy_active and touch_count > 0) {
-                for (0..@intCast(touch_count)) |i| {
-                    const idx: i32 = @intCast(i);
-                    const tp = rl.getTouchPosition(idx);
-                    joy_active = true;
-                    joy_touch_id = rl.getTouchPointId(idx);
-                    joy_base = tp;
-                    joy_knob = tp;
-                    break;
-                }
-            }
-            if (joy_active) {
-                var found = false;
-                if (touch_count > 0) {
-                    for (0..@intCast(touch_count)) |i| {
-                        const idx: i32 = @intCast(i);
-                        if (rl.getTouchPointId(idx) == joy_touch_id) {
-                            const tp = rl.getTouchPosition(idx);
-                            const dx = tp.x - joy_base.x;
-                            const dy = tp.y - joy_base.y;
-                            const dist = @sqrt(dx * dx + dy * dy);
-                            if (dist > joy_radius) {
-                                joy_knob.x = joy_base.x + dx / dist * joy_radius;
-                                joy_knob.y = joy_base.y + dy / dist * joy_radius;
-                            } else {
-                                joy_knob = tp;
-                            }
-                            joy_dx = (joy_knob.x - joy_base.x) / joy_radius;
-                            joy_dy = (joy_knob.y - joy_base.y) / joy_radius;
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-                if (!found) {
-                    joy_active = false;
-                    joy_dx = 0;
-                    joy_dy = 0;
-                }
-            }
-        }
-
-        const joy_threshold: f32 = 0.3;
-        const key_down = rl.isKeyDown(.down) or joy_dy > joy_threshold;
-        const key_up = rl.isKeyDown(.up) or joy_dy < -joy_threshold;
-        const key_left = rl.isKeyDown(.left) or joy_dx < -joy_threshold;
-        const key_right = rl.isKeyDown(.right) or joy_dx > joy_threshold;
-        if (key_down and key_left) {
+        const inp = input.update();
+        if (inp.down and inp.left) {
             current_dir = dirs.down_left;
-        } else if (key_down and key_right) {
+        } else if (inp.down and inp.right) {
             current_dir = dirs.down_right;
-        } else if (key_up and key_left) {
+        } else if (inp.up and inp.left) {
             current_dir = dirs.up_left;
-        } else if (key_up and key_right) {
+        } else if (inp.up and inp.right) {
             current_dir = dirs.up_right;
-        } else if (key_down) {
+        } else if (inp.down) {
             current_dir = dirs.down;
-        } else if (key_up) {
+        } else if (inp.up) {
             current_dir = dirs.up;
-        } else if (key_left) {
+        } else if (inp.left) {
             current_dir = dirs.left;
-        } else if (key_right) {
+        } else if (inp.right) {
             current_dir = dirs.right;
         }
-        const moving = key_down or key_up or key_left or key_right;
+        const moving = inp.down or inp.up or inp.left or inp.right;
         if (!moving) {
             current_frame = 0;
             frame_rec.x = 0;
@@ -206,12 +149,7 @@ pub fn main(_: std.process.Init) !void {
             rl.drawTextureRec(robot_walk, frame_rec, draw_pos, .white);
         }
 
-        if (comptime builtin.os.tag == .emscripten) {
-            if (joy_active) {
-                rl.drawCircleV(joy_base, joy_radius, rl.Color.init(128, 128, 128, 80));
-                rl.drawCircleLinesV(joy_base, joy_radius, rl.Color.init(200, 200, 200, 150));
-                rl.drawCircleV(joy_knob, joy_knob_radius, rl.Color.init(220, 220, 220, 200));
-            }
-        }
+        // draw virtual joystick
+        input.drawJoystick();
     }
 }
