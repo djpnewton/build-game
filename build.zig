@@ -27,6 +27,9 @@ pub fn build(b: *std.Build) !void {
     const raylib = raylib_dep.module("raylib"); // main raylib module
     const raygui = raylib_dep.module("raygui"); // raygui module
     const raylib_artifact = raylib_dep.artifact("raylib"); // raylib C library
+    // xml
+    const xml_dep = b.dependency("xml", .{});
+    const xml = xml_dep.module("xml");
 
     const run_step = b.step("run", "Run the app");
 
@@ -42,6 +45,8 @@ pub fn build(b: *std.Build) !void {
         // raylib
         wasm.root_module.addImport("raylib", raylib);
         wasm.root_module.addImport("raygui", raygui);
+        // xml
+        wasm.root_module.addImport("xml", xml);
 
         const install_dir: std.Build.InstallDir = .{ .custom = "web" };
         const emcc_flags = emsdk.emccDefaultFlags(b.allocator, .{ .optimize = optimize });
@@ -56,9 +61,9 @@ pub fn build(b: *std.Build) !void {
             .shell_file_path = b.path("src/shell.html"),
             .install_dir = install_dir,
             .embed_paths = &.{
-                // Embed the entire sprites/ directory into the wasm virtual filesystem
+                // Embed the entire resources/ directory into the wasm virtual filesystem
                 // so raylib can load PNG files via the normal file path.
-                .{ .src_path = b.pathFromRoot("sprites"), .virtual_path = "sprites" },
+                .{ .src_path = b.pathFromRoot("resources"), .virtual_path = "resources" },
             },
         });
         b.getInstallStep().dependOn(emcc_step);
@@ -81,6 +86,8 @@ pub fn build(b: *std.Build) !void {
         exe.root_module.linkLibrary(raylib_artifact);
         exe.root_module.addImport("raylib", raylib);
         exe.root_module.addImport("raygui", raygui);
+        // xml
+        exe.root_module.addImport("xml", xml);
 
         b.installArtifact(exe);
 

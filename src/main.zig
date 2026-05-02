@@ -1,27 +1,42 @@
 const std = @import("std");
 const builtin = @import("builtin");
+
 const rl = @import("raylib");
 const rg = @import("raygui");
 
 const ut = @import("utils.zig");
+const tmx = @import("tmx.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
     //--------------------------------------------------------------------------------------
-    const screenWidth = 800;
-    const screenHeight = 450;
+
+    const screenWidth = 32 * 16;
+    const screenHeight = 32 * 16;
 
     rl.setConfigFlags(rl.ConfigFlags{ .window_resizable = true, .msaa_4x_hint = true });
     rl.initWindow(screenWidth, screenHeight, "build-game");
     defer rl.closeWindow(); // Close window and OpenGL context
 
-    const robot_static = rl.loadTexture("sprites/robot_static.png") catch {
+    // load map
+    var map = tmx.loadFile(std.heap.c_allocator, "resources/grass_tileset_16x16/grass_tileset_map.tmx") catch |err| {
+        std.debug.print("Failed to load map: {}\n", .{err});
+        return;
+    };
+    defer map.deinit(std.heap.c_allocator);
+    const tileset_textures = tmx.loadTextures(std.heap.c_allocator, map, std.fs.path.dirname("resources/grass_tileset_16x16/grass_tileset_map.tmx") orelse ".") catch |err| {
+        std.debug.print("Failed to load map tileset textures: {}\n", .{err});
+        return;
+    };
+    defer std.heap.c_allocator.free(tileset_textures);
+
+    const robot_static = rl.loadTexture("resources/sprites/robot_static.png") catch {
         rl.closeWindow();
         std.debug.print("Failed to load texture robot_static.png\n", .{});
         return;
     };
     defer rl.unloadTexture(robot_static);
-    const robot_walk = rl.loadTexture("sprites/robot_walk.png") catch {
+    const robot_walk = rl.loadTexture("resources/sprites/robot_walk.png") catch {
         rl.closeWindow();
         std.debug.print("Failed to load texture robot_walk.png\n", .{});
         return;
@@ -33,9 +48,7 @@ pub fn main(_: std.process.Init) !void {
     var frames_counter: i32 = 0;
     const frames_speed = 8;
     var frame_rec = rl.Rectangle{ .x = 0, .y = 0, .width = ut.i32tof32(robot_static.width), .height = ut.i32tof32(robot_static.height) / num_directions };
-    const offset_x = (ut.i32tof32(rl.getRenderWidth()) - ut.i32tof32(robot_static.width)) / 2;
-    const offset_y = (ut.i32tof32(rl.getRenderHeight()) - ut.i32tof32(robot_static.height) / num_directions) / 2;
-    var robot_pos = rl.Vector2{ .x = offset_x, .y = offset_y };
+    var robot_pos = rl.Vector2{ .x = 0, .y = 0 };
 
     const dirs = enum(u8) {
         down = 0,
@@ -180,21 +193,17 @@ pub fn main(_: std.process.Init) !void {
         defer rl.endDrawing();
         rl.clearBackground(ut.getBackgroundColor());
 
-        // draw faint grid lines for reference
-        const grid_spacing = 50;
-        for (0..@intCast(@divTrunc(rl.getRenderWidth(), grid_spacing))) |i| {
-            const x: i32 = @intCast(i * grid_spacing);
-            rl.drawLine(x, 0, x, rl.getRenderHeight(), .light_gray);
-        }
-        for (0..@intCast(@divTrunc(rl.getRenderHeight(), grid_spacing))) |i| {
-            const y: i32 = @intCast(i * grid_spacing);
-            rl.drawLine(0, y, rl.getRenderWidth(), y, .light_gray);
-        }
+        // draw map
+        tmx.draw(map, tileset_textures);
 
+        // draw robot
+        const offset_x = (ut.i32tof32(rl.getRenderWidth()) - ut.i32tof32(robot_static.width)) / 2;
+        const offset_y = (ut.i32tof32(rl.getRenderHeight()) - ut.i32tof32(robot_static.height) / num_directions) / 2;
+        const draw_pos = rl.Vector2{ .x = robot_pos.x + offset_x, .y = robot_pos.y + offset_y };
         if (!moving) {
-            rl.drawTextureRec(robot_static, frame_rec, robot_pos, .white);
+            rl.drawTextureRec(robot_static, frame_rec, draw_pos, .white);
         } else {
-            rl.drawTextureRec(robot_walk, frame_rec, robot_pos, .white);
+            rl.drawTextureRec(robot_walk, frame_rec, draw_pos, .white);
         }
 
         if (comptime builtin.os.tag == .emscripten) {
