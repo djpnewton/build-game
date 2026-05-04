@@ -50,12 +50,14 @@ pub const Map = struct {
     }
 };
 
+pub const TilePos = struct { col: i32, row: i32 };
+
 /// Converts a robot_pos (pixel offset from screen center) into tile coordinates.
-pub fn tileFromPos(robot_pos: rl.Vector2) struct { col: i32, row: i32 } {
+pub fn tileFromPos(robot_pos: rl.Vector2) TilePos {
     const half_cols: i32 = @intCast(COLS / 2);
     const half_rows: i32 = @intCast(ROWS / 2);
     // Use floor so negative offsets map to the correct tile (e.g. -1px -> tile -1, not 0)
     const col = half_cols + @as(i32, @intFromFloat(@floor(robot_pos.x / TILE_SIZE_F)));
     const row = half_rows + @as(i32, @intFromFloat(@floor(robot_pos.y / TILE_SIZE_F)));
-    return .{ .col = col, .row = row };
+    return TilePos{ .col = col, .row = row };
 }
