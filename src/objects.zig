@@ -1,5 +1,7 @@
 const rl = @import("raylib");
+
 const gmap = @import("map.zig");
+const portals = @import("portals.zig");
 
 const TRUNK_COLOR = rl.Color.init(101, 67, 33, 255);
 const FOLIAGE_DARK = rl.Color.init(34, 100, 34, 255);
@@ -18,6 +20,40 @@ const MAX_OBJECTS = 512;
 pub const ObjectMap = struct {
     objects: [MAX_OBJECTS]Object = undefined,
     count: usize = 0,
+
+    pub fn scatter(self: *ObjectMap, map: *gmap.Map) void {
+        const half_col: i32 = @intCast(gmap.COLS / 2);
+        const half_row: i32 = @intCast(gmap.ROWS / 2);
+        var col: i32 = 1;
+        while (col < gmap.COLS - 1) : (col += 1) {
+            var row: i32 = 1;
+            while (row < gmap.ROWS - 1) : (row += 1) {
+                // Keep centre clear for robot spawn
+                if (@abs(col - half_col) < 4 and @abs(row - half_row) < 4) continue;
+                // Keep portal tiles clear
+                if ((col == portals.red.col and row == portals.red.row) or
+                    (col == portals.blue.col and row == portals.blue.row)) continue;
+                // Large rocks (placed first so smaller objects won't spawn on top)
+                var g: u32 = @as(u32, @bitCast(col)) *% 2246822519;
+                g ^= @as(u32, @bitCast(row)) *% 2654435761;
+                g = (g ^ (g >> 13)) *% 1274126177;
+                g ^= g >> 16;
+                if (g % 18 == 0) self.place(map, col, row, .rock_large);
+                // Trees
+                var h: u32 = @as(u32, @bitCast(col)) *% 374761393;
+                h ^= @as(u32, @bitCast(row)) *% 668265263;
+                h = (h ^ (h >> 13)) *% 1274126177;
+                h ^= h >> 16;
+                if (h % 5 == 0) self.place(map, col, row, .tree);
+                // Small rocks
+                var r: u32 = @as(u32, @bitCast(col)) *% 668265263;
+                r ^= @as(u32, @bitCast(row)) *% 374761393;
+                r = (r ^ (r >> 13)) *% 1274126177;
+                r ^= r >> 16;
+                if (r % 11 == 0) self.place(map, col, row, .rock);
+            }
+        }
+    }
 
     pub fn place(self: *ObjectMap, map: *gmap.Map, col: i32, row: i32, kind: Kind) void {
         if (self.count >= MAX_OBJECTS) return;
