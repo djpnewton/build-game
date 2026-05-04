@@ -4,32 +4,24 @@ const rl = @import("raylib");
 const rg = @import("raygui");
 
 const ut = @import("utils.zig");
-const tmx = @import("tmx.zig");
+const gmap = @import("map.zig");
 const input = @import("input.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
     //--------------------------------------------------------------------------------------
 
-    const screenWidth = 32 * 16;
-    const screenHeight = 32 * 16;
+    const screenWidth: i32 = @as(i32, @intCast(gmap.COLS)) * gmap.TILE_SIZE;
+    const screenHeight: i32 = @as(i32, @intCast(gmap.ROWS)) * gmap.TILE_SIZE;
 
     rl.setConfigFlags(rl.ConfigFlags{ .window_resizable = true, .msaa_4x_hint = true });
     rl.initWindow(screenWidth, screenHeight, "build-game");
     defer rl.closeWindow(); // Close window and OpenGL context
 
-    // load map
-    var map = tmx.loadFile(std.heap.c_allocator, "resources/grass_tileset_16x16/grass_tileset_map.tmx") catch |err| {
-        std.debug.print("Failed to load map: {}\n", .{err});
-        return;
-    };
-    defer map.deinit(std.heap.c_allocator);
-    const tileset_textures = tmx.loadTextures(std.heap.c_allocator, map, std.fs.path.dirname("resources/grass_tileset_16x16/grass_tileset_map.tmx") orelse ".") catch |err| {
-        std.debug.print("Failed to load map tileset textures: {}\n", .{err});
-        return;
-    };
-    defer std.heap.c_allocator.free(tileset_textures);
+    // virtual map
+    var game_map: gmap.Map = .{};
 
+    // load robot
     const robot_static = rl.loadTexture("resources/sprites/robot_static.png") catch {
         rl.closeWindow();
         std.debug.print("Failed to load texture robot_static.png\n", .{});
@@ -71,6 +63,9 @@ pub fn main(_: std.process.Init) !void {
         //----------------------------------------------------------------------------------
 
         const inp = input.update();
+        // reveal fog around current robot tile
+        const tile = gmap.tileFromPos(robot_pos);
+        game_map.revealAround(tile.col, tile.row, 3);
         if (inp.down and inp.left) {
             current_dir = dirs.down_left;
         } else if (inp.down and inp.right) {
@@ -137,7 +132,7 @@ pub fn main(_: std.process.Init) !void {
         rl.clearBackground(ut.getBackgroundColor());
 
         // draw map
-        tmx.draw(map, tileset_textures);
+        game_map.draw();
 
         // draw robot
         const offset_x = (ut.i32tof32(rl.getRenderWidth()) - ut.i32tof32(robot_static.width)) / 2;
