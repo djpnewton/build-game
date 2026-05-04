@@ -57,6 +57,10 @@ pub const Footsteps = struct {
     count: usize = 0,
     last_tile: gmap.TilePos = .{ .col = -9999, .row = -9999 },
 
+    pub fn resetLastTile(self: *Footsteps) void {
+        self.last_tile = .{ .col = -9999, .row = -9999 };
+    }
+
     pub fn update(self: *Footsteps, tile: gmap.TilePos, dir: robot_mod.Dir) void {
         const is_diagonal = switch (dir) {
             .down_right, .up_right, .up_left, .down_left => true,

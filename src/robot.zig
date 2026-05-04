@@ -59,6 +59,13 @@ pub const Robot = struct {
         self.path_idx = 0;
     }
 
+    pub fn teleport(self: *Robot, dest: gmap.TilePos) void {
+        const world = tileToWorld(dest.col, dest.row);
+        self.pos = world;
+        self.target = world;
+        self.path_len = 0;
+    }
+
     pub fn load() !Robot {
         const tex_static = try rl.loadTexture("resources/sprites/robot_static.png");
         errdefer rl.unloadTexture(tex_static);

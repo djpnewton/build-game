@@ -12,6 +12,7 @@ const objects_mod = @import("objects.zig");
 const camera_mod = @import("camera.zig");
 const pathfinding = @import("pathfinding.zig");
 const anim = @import("animations.zig");
+const portals = @import("portals.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
@@ -37,6 +38,9 @@ pub fn main(_: std.process.Init) !void {
             var row: i32 = 1;
             while (row < gmap.ROWS - 1) : (row += 1) {
                 if (@abs(col - @as(i32, gmap.COLS / 2)) < 4 and @abs(row - @as(i32, gmap.ROWS / 2)) < 4) continue;
+                // Leave portal tiles clear
+                if ((col == portals.red.col and row == portals.red.row) or
+                    (col == portals.blue.col and row == portals.blue.row)) continue;
                 // Large rocks (placed first so smaller objects won't spawn on top)
                 var g: u32 = @as(u32, @bitCast(col)) *% 2246822519;
                 g ^= @as(u32, @bitCast(row)) *% 2654435761;
@@ -79,6 +83,7 @@ pub fn main(_: std.process.Init) !void {
         // Update
         //----------------------------------------------------------------------------------
         const tile = robot.update(&game_map);
+        _ = portals.tryTeleport(tile, &robot, &footsteps, &game_map);
         game_map.revealAround(tile.col, tile.row, 3);
         footsteps.update(tile, robot.dir);
         camera.follow(robot.pos.x, robot.pos.y);
@@ -114,6 +119,7 @@ pub fn main(_: std.process.Init) !void {
         rl.clearBackground(ut.getBackgroundColor());
 
         game_map.draw(off.x, off.y);
+        portals.draw(&game_map, off.x, off.y);
         footsteps.draw(off.x, off.y);
         obj_map.draw(&game_map, off.x, off.y);
         anim.draw(off.x, off.y);
