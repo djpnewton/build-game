@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const rl = @import("raylib");
 
 pub const TILE_SIZE: i32 = 32;
@@ -10,17 +11,19 @@ const GRASS_LIGHT = rl.Color.init(85, 170, 85, 255);
 const GRASS_DARK = rl.Color.init(70, 145, 70, 255);
 const FOG_COLOR = rl.Color.init(0, 0, 0, 255);
 
-pub const Map = struct {
+/// Abstract tile grid used by all map types.  Holds visibility + collision
+/// data and the logic that operates on it.  Drawing is left to each scene.
+pub const TileMap = struct {
     visible: [ROWS][COLS]bool = std.mem.zeroes([ROWS][COLS]bool),
     blocked: [ROWS][COLS]bool = std.mem.zeroes([ROWS][COLS]bool),
 
-    pub fn isBlocked(self: *const Map, col: i32, row: i32) bool {
+    pub fn isBlocked(self: *const TileMap, col: i32, row: i32) bool {
         if (col < 0 or col >= COLS or row < 0 or row >= ROWS) return true;
         return self.blocked[@intCast(row)][@intCast(col)];
     }
 
     /// Reveal all tiles within `radius` tiles of (tile_col, tile_row).
-    pub fn revealAround(self: *Map, tile_col: i32, tile_row: i32, radius: i32) void {
+    pub fn revealAround(self: *TileMap, tile_col: i32, tile_row: i32, radius: i32) void {
         var dy: i32 = -radius;
         while (dy <= radius) : (dy += 1) {
             var dx: i32 = -radius;
@@ -33,17 +36,21 @@ pub const Map = struct {
             }
         }
     }
+};
 
-    pub fn draw(self: Map, off_x: f32, off_y: f32) void {
+/// Overworld scene: grassy outdoor map.  Wraps TileMap and owns its drawing.
+pub const OverworldMap = struct {
+    map: TileMap = .{},
+
+    pub fn draw(self: OverworldMap, off_x: f32, off_y: f32) void {
         const screen_w: f32 = @floatFromInt(rl.getRenderWidth());
         const screen_h: f32 = @floatFromInt(rl.getRenderHeight());
         for (0..ROWS) |row| {
             for (0..COLS) |col| {
                 const x: f32 = off_x + @as(f32, @floatFromInt(col)) * TILE_SIZE_F;
                 const y: f32 = off_y + @as(f32, @floatFromInt(row)) * TILE_SIZE_F;
-                // Cull tiles fully outside the screen
                 if (x + TILE_SIZE_F < 0 or x > screen_w or y + TILE_SIZE_F < 0 or y > screen_h) continue;
-                const color = if (self.visible[row][col])
+                const color = if (self.map.visible[row][col])
                     if ((row + col) % 2 == 0) GRASS_LIGHT else GRASS_DARK
                 else
                     FOG_COLOR;
@@ -78,13 +85,13 @@ pub const dungeon_spawn: TilePos = .{ .col = 1, .row = 1 };
 const CELL_COUNT: usize = 9; // 9×9 cells → tiles 1,3,5…17 per axis
 const NCELLS: i32 = CELL_COUNT;
 
-const WALL_COLOR      = rl.Color.init(58,  54,  49,  255);
-const WALL_MORTAR     = rl.Color.init(26,  24,  22,  255);
-const WALL_BRICK_HI   = rl.Color.init(76,  71,  63,  255);
-const WALL_BRICK_DARK = rl.Color.init(42,  39,  35,  255);
-const WALL_TOP        = rl.Color.init(88,  82,  73,  255);
-const FLOOR_EVEN      = rl.Color.init(92,  87,  81,  255);
-const FLOOR_ODD       = rl.Color.init(82,  77,  71,  255);
+const WALL_COLOR = rl.Color.init(58, 54, 49, 255);
+const WALL_MORTAR = rl.Color.init(26, 24, 22, 255);
+const WALL_BRICK_HI = rl.Color.init(76, 71, 63, 255);
+const WALL_BRICK_DARK = rl.Color.init(42, 39, 35, 255);
+const WALL_TOP = rl.Color.init(88, 82, 73, 255);
+const FLOOR_EVEN = rl.Color.init(92, 87, 81, 255);
+const FLOOR_ODD = rl.Color.init(82, 77, 71, 255);
 
 /// Draws a single wall tile with a staggered brick pattern.  Bricks are 15×7 px
 /// with 1 px mortar seams on the top/left of each slot (8×16 px slots).
@@ -93,35 +100,35 @@ fn drawWallTile(xi: i32, yi: i32, col: usize, row: usize) void {
     // Fill with mortar colour – seams show through wherever no brick is drawn.
     rl.drawRectangle(xi, yi, TILE_SIZE, TILE_SIZE, WALL_MORTAR);
 
-    const bh: i32 = 8;  // brick slot height  (1 mortar + 7 brick)
+    const bh: i32 = 8; // brick slot height  (1 mortar + 7 brick)
     const bw: i32 = 16; // brick slot width   (1 mortar + 15 brick)
 
     // Per-tile hash for colour variation across bricks.
     var h: u32 = @as(u32, @intCast(col)) *% 2246822519;
     h ^= @as(u32, @intCast(row)) *% 2654435761;
-    h  = (h ^ (h >> 13)) *% 1274126177;
+    h = (h ^ (h >> 13)) *% 1274126177;
     h ^= h >> 16;
 
     for (0..4) |br| {
-        const bri: i32  = @intCast(br);
-        const brick_y   = yi + bri * bh + 1;  // +1 for top mortar row
+        const bri: i32 = @intCast(br);
+        const brick_y = yi + bri * bh + 1; // +1 for top mortar row
         // Stagger alternates each sub-row; depends only on (row+br) parity
         // so the seam pattern is seamless across adjacent wall tiles.
         const stagger: i32 = if ((row + br) % 2 == 0) 0 else @divExact(bw, 2);
 
         var bc: i32 = -1;
         while (bc * bw - stagger < TILE_SIZE) : (bc += 1) {
-            const brick_x = xi + bc * bw - stagger + 1;  // +1 for left mortar
-            const clip_l  = @max(brick_x, xi);
-            const clip_r  = @min(brick_x + bw - 1, xi + TILE_SIZE);
+            const brick_x = xi + bc * bw - stagger + 1; // +1 for left mortar
+            const clip_l = @max(brick_x, xi);
+            const clip_r = @min(brick_x + bw - 1, xi + TILE_SIZE);
             if (clip_r <= clip_l) continue;
 
             const bk: u32 = @as(u32, @intCast(br)) * 8 +
-                            @as(u32, @intCast(bc + 1)); // bc+1 ≥ 0
+                @as(u32, @intCast(bc + 1)); // bc+1 ≥ 0
             const brick_hash = h ^ (bk *% 374761393);
             const color = switch (brick_hash & 7) {
                 0, 1 => WALL_BRICK_HI,
-                6    => WALL_BRICK_DARK,
+                6 => WALL_BRICK_DARK,
                 else => WALL_COLOR,
             };
             rl.drawRectangle(clip_l, brick_y, clip_r - clip_l, bh - 1, color);
@@ -133,7 +140,7 @@ fn drawWallTile(xi: i32, yi: i32, col: usize, row: usize) void {
 }
 
 pub const DungeonMap = struct {
-    map: Map = .{},
+    map: TileMap = .{},
     generated: bool = false,
 
     pub fn ensureGenerated(self: *DungeonMap) void {
@@ -185,8 +192,8 @@ pub const DungeonMap = struct {
                 stack_len -= 1;
             } else {
                 const next = nbrs[rand.intRangeLessThan(usize, 0, nbr_count)];
-                const tc  = 1 + 2 * @as(usize, cur[0]);
-                const tr  = 1 + 2 * @as(usize, cur[1]);
+                const tc = 1 + 2 * @as(usize, cur[0]);
+                const tr = 1 + 2 * @as(usize, cur[1]);
                 const tnc = 1 + 2 * @as(usize, next[0]);
                 const tnr = 1 + 2 * @as(usize, next[1]);
                 self.map.blocked[(tr + tnr) / 2][(tc + tnc) / 2] = false;
@@ -218,6 +225,5 @@ pub const DungeonMap = struct {
                 }
             }
         }
-
     }
 };

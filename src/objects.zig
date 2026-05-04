@@ -21,7 +21,7 @@ pub const ObjectMap = struct {
     objects: [MAX_OBJECTS]Object = undefined,
     count: usize = 0,
 
-    pub fn scatter(self: *ObjectMap, map: *gmap.Map) void {
+    pub fn scatter(self: *ObjectMap, map: *gmap.TileMap) void {
         const half_col: i32 = @intCast(gmap.COLS / 2);
         const half_row: i32 = @intCast(gmap.ROWS / 2);
         var col: i32 = 1;
@@ -59,7 +59,7 @@ pub const ObjectMap = struct {
         self.place(map, gmap.overworld_entrance.col, gmap.overworld_entrance.row, .stairs_down);
     }
 
-    pub fn place(self: *ObjectMap, map: *gmap.Map, col: i32, row: i32, kind: Kind) void {
+    pub fn place(self: *ObjectMap, map: *gmap.TileMap, col: i32, row: i32, kind: Kind) void {
         if (self.count >= MAX_OBJECTS) return;
         if (col < 0 or col >= gmap.COLS or row < 0 or row >= gmap.ROWS) return;
         if (kind == .rock_large) {
@@ -81,7 +81,7 @@ pub const ObjectMap = struct {
         self.count += 1;
     }
 
-    pub fn draw(self: ObjectMap, map: *const gmap.Map, off_x: f32, off_y: f32) void {
+    pub fn draw(self: ObjectMap, map: *const gmap.TileMap, off_x: f32, off_y: f32) void {
         for (self.objects[0..self.count]) |obj| {
             if (!map.visible[@intCast(obj.row)][@intCast(obj.col)]) continue;
             const x = off_x + @as(f32, @floatFromInt(obj.col)) * gmap.TILE_SIZE_F;

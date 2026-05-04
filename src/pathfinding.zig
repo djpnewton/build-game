@@ -8,7 +8,7 @@ const N = gmap.COLS * gmap.ROWS;
 /// Writes the path (excluding start, including goal) into `out`.
 /// Returns the number of tiles written, or 0 if no path exists.
 pub fn findPath(
-    map: *const gmap.Map,
+    map: *const gmap.TileMap,
     start: gmap.TilePos,
     goal: gmap.TilePos,
     out: []gmap.TilePos,
@@ -106,7 +106,7 @@ pub fn findPath(
 /// Like findPath, but if `goal` is blocked (or out of bounds) it searches
 /// outward from `goal` in BFS order to find the nearest walkable tile.
 pub fn findPathTo(
-    map: *const gmap.Map,
+    map: *const gmap.TileMap,
     start: gmap.TilePos,
     goal: gmap.TilePos,
     out: []gmap.TilePos,

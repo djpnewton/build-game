@@ -79,7 +79,7 @@ pub const Robot = struct {
     }
 
     /// Updates movement and animation. Returns the current tile position.
-    pub fn update(self: *Robot, map: *const gmap.Map) gmap.TilePos {
+    pub fn update(self: *Robot, map: *const gmap.TileMap) gmap.TilePos {
         const dx_rem = self.target.x - self.pos.x;
         const dy_rem = self.target.y - self.pos.y;
         const at_target = @abs(dx_rem) < MOVE_SPEED and @abs(dy_rem) < MOVE_SPEED;

@@ -17,7 +17,7 @@ pub fn tryTeleport(
     tile: gmap.TilePos,
     robot: *robot_mod.Robot,
     fs: *footsteps_mod.Footsteps,
-    map: *gmap.Map,
+    map: *gmap.TileMap,
 ) ?gmap.TilePos {
     if (check(tile)) |dest| {
         if (tile.col != last_dest.col or tile.row != last_dest.row) {
@@ -39,13 +39,13 @@ fn check(tile: gmap.TilePos) ?gmap.TilePos {
     return null;
 }
 
-pub fn draw(map: *const gmap.Map, off_x: f32, off_y: f32) void {
+pub fn draw(map: *const gmap.TileMap, off_x: f32, off_y: f32) void {
     drawPortal(map, off_x, off_y, red, rl.Color.init(220, 50, 50, 255), rl.Color.init(255, 120, 120, 180));
     drawPortal(map, off_x, off_y, blue, rl.Color.init(50, 100, 220, 255), rl.Color.init(120, 160, 255, 180));
 }
 
 fn drawPortal(
-    map: *const gmap.Map,
+    map: *const gmap.TileMap,
     off_x: f32,
     off_y: f32,
     pos: gmap.TilePos,
