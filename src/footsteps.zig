@@ -94,12 +94,7 @@ pub const Footsteps = struct {
         self.count = keep;
     }
 
-    pub fn draw(self: Footsteps) void {
-        const screen_w: f32 = @floatFromInt(rl.getRenderWidth());
-        const screen_h: f32 = @floatFromInt(rl.getRenderHeight());
-        const off_x: f32 = (screen_w - @as(f32, @floatFromInt(gmap.COLS)) * gmap.TILE_SIZE_F) / 2;
-        const off_y: f32 = (screen_h - @as(f32, @floatFromInt(gmap.ROWS)) * gmap.TILE_SIZE_F) / 2;
-
+    pub fn draw(self: Footsteps, off_x: f32, off_y: f32) void {
         for (self.steps[0..self.count]) |s| {
             const fade = 1.0 - (s.age / FADE_FRAMES);
             const alpha: u8 = @intFromFloat(fade * 210);

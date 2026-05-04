@@ -9,6 +9,7 @@ const input = @import("input.zig");
 const robot_mod = @import("robot.zig");
 const footsteps_mod = @import("footsteps.zig");
 const objects_mod = @import("objects.zig");
+const camera_mod = @import("camera.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
@@ -25,6 +26,7 @@ pub fn main(_: std.process.Init) !void {
     var game_map: gmap.Map = .{};
     var footsteps: footsteps_mod.Footsteps = .{};
     var obj_map: objects_mod.ObjectMap = .{};
+    var camera: camera_mod.Camera = .{};
 
     // Scatter trees across the map, avoiding the robot's starting area
     {
@@ -73,6 +75,8 @@ pub fn main(_: std.process.Init) !void {
         const tile = robot.update(&game_map);
         game_map.revealAround(tile.col, tile.row, 3);
         footsteps.update(tile, robot.dir);
+        camera.follow(robot.pos.x, robot.pos.y);
+        const off = camera.offset();
 
         // Draw
         //----------------------------------------------------------------------------------
@@ -80,10 +84,10 @@ pub fn main(_: std.process.Init) !void {
         defer rl.endDrawing();
         rl.clearBackground(ut.getBackgroundColor());
 
-        game_map.draw();
-        footsteps.draw();
-        obj_map.draw(&game_map);
-        robot.draw();
+        game_map.draw(off.x, off.y);
+        footsteps.draw(off.x, off.y);
+        obj_map.draw(&game_map, off.x, off.y);
+        robot.draw(off.x, off.y);
         input.drawJoystick();
     }
 }

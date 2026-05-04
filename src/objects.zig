@@ -38,12 +38,7 @@ pub const ObjectMap = struct {
         self.count += 1;
     }
 
-    pub fn draw(self: ObjectMap, map: *const gmap.Map) void {
-        const screen_w: f32 = @floatFromInt(rl.getRenderWidth());
-        const screen_h: f32 = @floatFromInt(rl.getRenderHeight());
-        const off_x: f32 = (screen_w - @as(f32, @floatFromInt(gmap.COLS)) * gmap.TILE_SIZE_F) / 2;
-        const off_y: f32 = (screen_h - @as(f32, @floatFromInt(gmap.ROWS)) * gmap.TILE_SIZE_F) / 2;
-
+    pub fn draw(self: ObjectMap, map: *const gmap.Map, off_x: f32, off_y: f32) void {
         for (self.objects[0..self.count]) |obj| {
             if (!map.visible[@intCast(obj.row)][@intCast(obj.col)]) continue;
             const x = off_x + @as(f32, @floatFromInt(obj.col)) * gmap.TILE_SIZE_F;

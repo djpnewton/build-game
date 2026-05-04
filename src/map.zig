@@ -34,18 +34,15 @@ pub const Map = struct {
         }
     }
 
-    pub fn draw(self: Map) void {
+    pub fn draw(self: Map, off_x: f32, off_y: f32) void {
         const screen_w: f32 = @floatFromInt(rl.getRenderWidth());
         const screen_h: f32 = @floatFromInt(rl.getRenderHeight());
-        const map_w: f32 = @as(f32, @floatFromInt(COLS)) * TILE_SIZE_F;
-        const map_h: f32 = @as(f32, @floatFromInt(ROWS)) * TILE_SIZE_F;
-        const off_x: f32 = (screen_w - map_w) / 2;
-        const off_y: f32 = (screen_h - map_h) / 2;
-
         for (0..ROWS) |row| {
             for (0..COLS) |col| {
                 const x: f32 = off_x + @as(f32, @floatFromInt(col)) * TILE_SIZE_F;
                 const y: f32 = off_y + @as(f32, @floatFromInt(row)) * TILE_SIZE_F;
+                // Cull tiles fully outside the screen
+                if (x + TILE_SIZE_F < 0 or x > screen_w or y + TILE_SIZE_F < 0 or y > screen_h) continue;
                 const color = if (self.visible[row][col])
                     if ((row + col) % 2 == 0) GRASS_LIGHT else GRASS_DARK
                 else

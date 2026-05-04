@@ -128,13 +128,13 @@ pub const Robot = struct {
         return gmap.tileFromPos(self.pos);
     }
 
-    pub fn draw(self: Robot) void {
+    pub fn draw(self: Robot, off_x: f32, off_y: f32) void {
         const sprite_w: f32 = ut.i32tof32(self.tex_static.width);
         const sprite_h: f32 = ut.i32tof32(self.tex_static.height) / NUM_DIRECTIONS;
-        const map_off_x: f32 = (@as(f32, @floatFromInt(rl.getRenderWidth())) - @as(f32, @floatFromInt(gmap.COLS)) * gmap.TILE_SIZE_F) / 2;
-        const map_off_y: f32 = (@as(f32, @floatFromInt(rl.getRenderHeight())) - @as(f32, @floatFromInt(gmap.ROWS)) * gmap.TILE_SIZE_F) / 2;
-        const origin_x: f32 = map_off_x + @as(f32, @floatFromInt(gmap.COLS / 2)) * gmap.TILE_SIZE_F;
-        const origin_y: f32 = map_off_y + @as(f32, @floatFromInt(gmap.ROWS / 2)) * gmap.TILE_SIZE_F;
+        // Map origin in screen space: off_x/off_y is the top-left of tile (0,0),
+        // the robot coordinate origin is the centre of the map.
+        const origin_x: f32 = off_x + @as(f32, @floatFromInt(gmap.COLS / 2)) * gmap.TILE_SIZE_F;
+        const origin_y: f32 = off_y + @as(f32, @floatFromInt(gmap.ROWS / 2)) * gmap.TILE_SIZE_F;
         const draw_pos = rl.Vector2{
             .x = origin_x + self.pos.x + (gmap.TILE_SIZE_F - sprite_w) / 2,
             .y = origin_y + self.pos.y + (gmap.TILE_SIZE_F - sprite_h) / 2,
