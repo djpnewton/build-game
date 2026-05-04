@@ -12,6 +12,12 @@ const FOG_COLOR = rl.Color.init(0, 0, 0, 255);
 
 pub const Map = struct {
     visible: [ROWS][COLS]bool = std.mem.zeroes([ROWS][COLS]bool),
+    blocked: [ROWS][COLS]bool = std.mem.zeroes([ROWS][COLS]bool),
+
+    pub fn isBlocked(self: *const Map, col: i32, row: i32) bool {
+        if (col < 0 or col >= COLS or row < 0 or row >= ROWS) return true;
+        return self.blocked[@intCast(row)][@intCast(col)];
+    }
 
     /// Reveal all tiles within `radius` tiles of (tile_col, tile_row).
     pub fn revealAround(self: *Map, tile_col: i32, tile_row: i32, radius: i32) void {

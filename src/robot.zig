@@ -43,7 +43,7 @@ pub const Robot = struct {
     }
 
     /// Updates movement and animation. Returns the current tile position.
-    pub fn update(self: *Robot) gmap.TilePos {
+    pub fn update(self: *Robot, map: *const gmap.Map) gmap.TilePos {
         const dx_rem = self.target.x - self.pos.x;
         const dy_rem = self.target.y - self.pos.y;
         const at_target = @abs(dx_rem) < MOVE_SPEED and @abs(dy_rem) < MOVE_SPEED;
@@ -86,6 +86,14 @@ pub const Robot = struct {
             const max_y = @as(f32, @floatFromInt(gmap.ROWS / 2)) * gmap.TILE_SIZE_F;
             new_target.x = std.math.clamp(new_target.x, -max_x, max_x - gmap.TILE_SIZE_F);
             new_target.y = std.math.clamp(new_target.y, -max_y, max_y - gmap.TILE_SIZE_F);
+            // Cancel move if the target tile is blocked by an object
+            if (new_target.x != self.target.x or new_target.y != self.target.y) {
+                const t = gmap.tileFromPos(new_target);
+                if (map.isBlocked(t.col, t.row)) {
+                    new_target = self.target;
+                    self.dir = self.dir; // keep facing direction
+                }
+            }
             self.target = new_target;
         }
 
