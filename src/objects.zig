@@ -11,7 +11,7 @@ const ROCK_MID = rl.Color.init(138, 132, 125, 255);
 const ROCK_LIGHT = rl.Color.init(175, 170, 163, 255);
 const ROCK_CRACK = rl.Color.init(75, 70, 66, 255);
 
-pub const Kind = enum { tree, rock, rock_large };
+pub const Kind = enum { tree, rock, rock_large, stairs_down, stairs_up };
 
 const Object = struct { col: i32, row: i32, kind: Kind };
 
@@ -33,6 +33,8 @@ pub const ObjectMap = struct {
                 // Keep portal tiles clear
                 if ((col == portals.red.col and row == portals.red.row) or
                     (col == portals.blue.col and row == portals.blue.row)) continue;
+                // Keep dungeon entrance clear
+                if (col == gmap.overworld_entrance.col and row == gmap.overworld_entrance.row) continue;
                 // Large rocks (placed first so smaller objects won't spawn on top)
                 var g: u32 = @as(u32, @bitCast(col)) *% 2246822519;
                 g ^= @as(u32, @bitCast(row)) *% 2654435761;
@@ -53,6 +55,8 @@ pub const ObjectMap = struct {
                 if (r % 11 == 0) self.place(map, col, row, .rock);
             }
         }
+        // Place the dungeon entrance marker (guaranteed clear tile).
+        self.place(map, gmap.overworld_entrance.col, gmap.overworld_entrance.row, .stairs_down);
     }
 
     pub fn place(self: *ObjectMap, map: *gmap.Map, col: i32, row: i32, kind: Kind) void {
@@ -66,6 +70,9 @@ pub const ObjectMap = struct {
             map.blocked[@intCast(row)][@intCast(col + 1)] = true;
             map.blocked[@intCast(row + 1)][@intCast(col)] = true;
             map.blocked[@intCast(row + 1)][@intCast(col + 1)] = true;
+        } else if (kind == .stairs_down or kind == .stairs_up) {
+            // Non-blocking — just a visual marker.
+            if (map.isBlocked(col, row)) return;
         } else {
             if (map.isBlocked(col, row)) return;
             map.blocked[@intCast(row)][@intCast(col)] = true;
@@ -83,6 +90,8 @@ pub const ObjectMap = struct {
                 .tree => drawTree(x, y),
                 .rock => drawRock(x, y),
                 .rock_large => drawRockLarge(x, y),
+                .stairs_down => drawStairsDown(x, y),
+                .stairs_up => drawStairsUp(x, y),
             }
         }
     }
@@ -120,4 +129,36 @@ fn drawRockLarge(x: f32, y: f32) void {
     rl.drawLine(cx - 9, cy + 2, cx - 3, cy + 11, ROCK_CRACK);
     rl.drawLine(cx + 1, cy - 12, cx + 7, cy - 4, ROCK_CRACK);
     rl.drawLine(cx - 5, cy - 2, cx + 2, cy + 3, ROCK_CRACK);
+}
+
+fn drawStairsDown(x: f32, y: f32) void {
+    const xi: i32 = @intFromFloat(x);
+    const yi: i32 = @intFromFloat(y);
+    const ts = gmap.TILE_SIZE;
+    rl.drawRectangle(xi + 3, yi + 3, ts - 6, ts - 6, rl.Color.init(28, 26, 23, 255));
+    const step = rl.Color.init(155, 138, 100, 255);
+    const shadow = rl.Color.init(80, 68, 48, 255);
+    for (0..3) |i| {
+        const fi: i32 = @intCast(i);
+        const m = 3 + fi * 3;
+        const sy = yi + 5 + fi * 6;
+        rl.drawRectangle(xi + m, sy, ts - m * 2, 4, step);
+        rl.drawRectangle(xi + m, sy + 4, ts - m * 2, 1, shadow);
+    }
+}
+
+fn drawStairsUp(x: f32, y: f32) void {
+    const xi: i32 = @intFromFloat(x);
+    const yi: i32 = @intFromFloat(y);
+    const ts = gmap.TILE_SIZE;
+    const step = rl.Color.init(175, 155, 115, 255);
+    const shadow = rl.Color.init(100, 85, 60, 255);
+    for (0..4) |i| {
+        const fi: i32 = @intCast(i);
+        const w = ts - 4 - fi * 6;
+        const sx = xi + 2 + fi * 3;
+        const sy = yi + 4 + fi * 5;
+        rl.drawRectangle(sx, sy, w, 4, step);
+        rl.drawRectangle(sx, sy + 4, w, 1, shadow);
+    }
 }

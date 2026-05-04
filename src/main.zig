@@ -5,14 +5,13 @@ const rg = @import("raygui");
 
 const ut = @import("utils.zig");
 const gmap = @import("map.zig");
+const world_mod = @import("world.zig");
 const input = @import("input.zig");
 const robot_mod = @import("robot.zig");
 const footsteps_mod = @import("footsteps.zig");
-const objects_mod = @import("objects.zig");
 const camera_mod = @import("camera.zig");
 const pathfinding = @import("pathfinding.zig");
 const anim = @import("animations.zig");
-const portals = @import("portals.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
@@ -25,12 +24,10 @@ pub fn main(_: std.process.Init) !void {
     rl.initWindow(screenWidth, screenHeight, "build-game");
     defer rl.closeWindow(); // Close window and OpenGL context
 
-    // virtual map
     var camera: camera_mod.Camera = .{};
-    var game_map: gmap.Map = .{};
+    var world: world_mod.WorldState = .{};
+    world.init();
     var footsteps: footsteps_mod.Footsteps = .{};
-    var obj_map: objects_mod.ObjectMap = .{};
-    obj_map.scatter(&game_map);
 
     // load robot
     var robot = robot_mod.Robot.load() catch {
@@ -51,9 +48,12 @@ pub fn main(_: std.process.Init) !void {
     while (!rl.windowShouldClose()) {
         // Update
         //----------------------------------------------------------------------------------
-        const tile = robot.update(&game_map);
-        _ = portals.tryTeleport(tile, &robot, &footsteps, &game_map);
-        game_map.revealAround(tile.col, tile.row, 3);
+        const active_map = world.activeMap();
+        const tile = robot.update(active_map);
+
+        world.trySceneTransition(tile, &robot, &footsteps);
+
+        active_map.revealAround(tile.col, tile.row, 3);
         footsteps.update(tile, robot.dir);
         camera.follow(robot.pos.x, robot.pos.y);
         const off = camera.offset();
@@ -68,7 +68,7 @@ pub fn main(_: std.process.Init) !void {
             {
                 const start = gmap.tileFromPos(robot.pos);
                 const n = pathfinding.findPathTo(
-                    &game_map,
+                    active_map,
                     start,
                     .{ .col = click_col, .row = click_row },
                     &path_buf,
@@ -87,10 +87,8 @@ pub fn main(_: std.process.Init) !void {
         defer rl.endDrawing();
         rl.clearBackground(ut.getBackgroundColor());
 
-        game_map.draw(off.x, off.y);
-        portals.draw(&game_map, off.x, off.y);
+        world.draw(off.x, off.y);
         footsteps.draw(off.x, off.y);
-        obj_map.draw(&game_map, off.x, off.y);
         anim.draw(off.x, off.y);
         robot.draw(off.x, off.y);
         input.drawJoystick();
