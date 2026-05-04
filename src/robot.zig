@@ -9,6 +9,25 @@ const MOVE_SPEED: f32 = 4.0;
 const NUM_FRAMES = 6;
 const NUM_DIRECTIONS = 8;
 const FRAMES_SPEED = 8;
+const MAX_PATH = gmap.COLS * gmap.ROWS;
+
+fn dirFromDelta(dc: i32, dr: i32) Dir {
+    if (dc < 0 and dr < 0) return .up_left;
+    if (dc > 0 and dr < 0) return .up_right;
+    if (dc < 0 and dr > 0) return .down_left;
+    if (dc > 0 and dr > 0) return .down_right;
+    if (dc < 0) return .left;
+    if (dc > 0) return .right;
+    if (dr < 0) return .up;
+    return .down;
+}
+
+fn tileToWorld(col: i32, row: i32) rl.Vector2 {
+    return .{
+        .x = @as(f32, @floatFromInt(col - @as(i32, @intCast(gmap.COLS / 2)))) * gmap.TILE_SIZE_F,
+        .y = @as(f32, @floatFromInt(row - @as(i32, @intCast(gmap.ROWS / 2)))) * gmap.TILE_SIZE_F,
+    };
+}
 
 pub const Dir = enum(u8) {
     down = 0,
@@ -29,6 +48,16 @@ pub const Robot = struct {
     frames_counter: i32 = 0,
     tex_static: rl.Texture,
     tex_walk: rl.Texture,
+    path: [MAX_PATH]gmap.TilePos = undefined,
+    path_len: usize = 0,
+    path_idx: usize = 0,
+
+    pub fn setPath(self: *Robot, tiles: []const gmap.TilePos) void {
+        const n = @min(tiles.len, MAX_PATH);
+        @memcpy(self.path[0..n], tiles[0..n]);
+        self.path_len = n;
+        self.path_idx = 0;
+    }
 
     pub fn load() !Robot {
         const tex_static = try rl.loadTexture("resources/sprites/robot_static.png");
@@ -51,50 +80,58 @@ pub const Robot = struct {
         if (at_target) {
             self.pos = self.target;
             const inp = input.update();
-            const step = gmap.TILE_SIZE_F;
-            var new_target = self.target;
-            if (inp.down and inp.left) {
-                self.dir = .down_left;
-                new_target.x -= step;
-                new_target.y += step;
-            } else if (inp.down and inp.right) {
-                self.dir = .down_right;
-                new_target.x += step;
-                new_target.y += step;
-            } else if (inp.up and inp.left) {
-                self.dir = .up_left;
-                new_target.x -= step;
-                new_target.y -= step;
-            } else if (inp.up and inp.right) {
-                self.dir = .up_right;
-                new_target.x += step;
-                new_target.y -= step;
-            } else if (inp.down) {
-                self.dir = .down;
-                new_target.y += step;
-            } else if (inp.up) {
-                self.dir = .up;
-                new_target.y -= step;
-            } else if (inp.left) {
-                self.dir = .left;
-                new_target.x -= step;
-            } else if (inp.right) {
-                self.dir = .right;
-                new_target.x += step;
-            }
-            const max_x = @as(f32, @floatFromInt(gmap.COLS / 2)) * gmap.TILE_SIZE_F;
-            const max_y = @as(f32, @floatFromInt(gmap.ROWS / 2)) * gmap.TILE_SIZE_F;
-            new_target.x = std.math.clamp(new_target.x, -max_x, max_x - gmap.TILE_SIZE_F);
-            new_target.y = std.math.clamp(new_target.y, -max_y, max_y - gmap.TILE_SIZE_F);
-            // Cancel move if the target tile is blocked by an object
-            if (new_target.x != self.target.x or new_target.y != self.target.y) {
-                const t = gmap.tileFromPos(new_target);
-                if (map.isBlocked(t.col, t.row)) {
-                    new_target = self.target;
-                    self.dir = self.dir; // keep facing direction
+            const has_input = inp.up or inp.down or inp.left or inp.right;
+
+            if (has_input) {
+                self.path_len = 0; // manual input cancels path
+                const step = gmap.TILE_SIZE_F;
+                var new_target = self.target;
+                if (inp.down and inp.left) {
+                    self.dir = .down_left;
+                    new_target.x -= step;
+                    new_target.y += step;
+                } else if (inp.down and inp.right) {
+                    self.dir = .down_right;
+                    new_target.x += step;
+                    new_target.y += step;
+                } else if (inp.up and inp.left) {
+                    self.dir = .up_left;
+                    new_target.x -= step;
+                    new_target.y -= step;
+                } else if (inp.up and inp.right) {
+                    self.dir = .up_right;
+                    new_target.x += step;
+                    new_target.y -= step;
+                } else if (inp.down) {
+                    self.dir = .down;
+                    new_target.y += step;
+                } else if (inp.up) {
+                    self.dir = .up;
+                    new_target.y -= step;
+                } else if (inp.left) {
+                    self.dir = .left;
+                    new_target.x -= step;
+                } else if (inp.right) {
+                    self.dir = .right;
+                    new_target.x += step;
                 }
+                const max_x = @as(f32, @floatFromInt(gmap.COLS / 2)) * gmap.TILE_SIZE_F;
+                const max_y = @as(f32, @floatFromInt(gmap.ROWS / 2)) * gmap.TILE_SIZE_F;
+                new_target.x = std.math.clamp(new_target.x, -max_x, max_x - gmap.TILE_SIZE_F);
+                new_target.y = std.math.clamp(new_target.y, -max_y, max_y - gmap.TILE_SIZE_F);
+                if (new_target.x != self.target.x or new_target.y != self.target.y) {
+                    const t = gmap.tileFromPos(new_target);
+                    if (map.isBlocked(t.col, t.row)) new_target = self.target;
+                }
+                self.target = new_target;
+            } else if (self.path_idx < self.path_len) {
+                // Follow next step of the A* path
+                const next = self.path[self.path_idx];
+                self.path_idx += 1;
+                const cur = gmap.tileFromPos(self.pos);
+                self.dir = dirFromDelta(next.col - cur.col, next.row - cur.row);
+                self.target = tileToWorld(next.col, next.row);
             }
-            self.target = new_target;
         }
 
         // Slide toward target
