@@ -7,6 +7,7 @@ const ut = @import("utils.zig");
 const gmap = @import("map.zig");
 const input = @import("input.zig");
 const robot_mod = @import("robot.zig");
+const footsteps_mod = @import("footsteps.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
@@ -21,6 +22,7 @@ pub fn main(_: std.process.Init) !void {
 
     // virtual map
     var game_map: gmap.Map = .{};
+    var footsteps: footsteps_mod.Footsteps = .{};
 
     // load robot
     var robot = robot_mod.Robot.load() catch {
@@ -39,6 +41,7 @@ pub fn main(_: std.process.Init) !void {
         //----------------------------------------------------------------------------------
         const tile = robot.update();
         game_map.revealAround(tile.col, tile.row, 3);
+        footsteps.update(tile, robot.dir);
 
         // Draw
         //----------------------------------------------------------------------------------
@@ -47,6 +50,7 @@ pub fn main(_: std.process.Init) !void {
         rl.clearBackground(ut.getBackgroundColor());
 
         game_map.draw();
+        footsteps.draw();
         robot.draw();
         input.drawJoystick();
     }
