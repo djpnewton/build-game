@@ -81,6 +81,8 @@ pub fn tileFromPos(robot_pos: rl.Vector2) TilePos {
 pub const overworld_entrance: TilePos = .{ .col = 14, .row = 14 };
 /// Tile in the dungeon where the robot spawns (also the exit stairs).
 pub const dungeon_spawn: TilePos = .{ .col = 1, .row = 1 };
+/// Tile in the dungeon where the diamond treasure is placed (far corner).
+pub const dungeon_diamond: TilePos = .{ .col = 17, .row = 17 };
 
 const CELL_COUNT: usize = 9; // 9×9 cells → tiles 1,3,5…17 per axis
 const NCELLS: i32 = CELL_COUNT;

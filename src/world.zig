@@ -24,6 +24,7 @@ pub const WorldState = struct {
     scene_stack: [MAX_DEPTH]SceneKind = [_]SceneKind{.overworld} ** MAX_DEPTH,
     scene_depth: usize = 1,
     scene_lock: ?gmap.TilePos = null,
+    diamond_collected: bool = false,
 
     pub fn init(self: *WorldState) void {
         self.overworld.obj_map.scatter(&self.overworld.tiles.map);
@@ -58,13 +59,20 @@ pub const WorldState = struct {
                     tile.row == gmap.overworld_entrance.row)
                 {
                     self.dungeon.tiles.ensureGenerated();
-                    if (self.dungeon.obj_map.count == 0)
+                    if (self.dungeon.obj_map.count == 0) {
                         self.dungeon.obj_map.place(
                             &self.dungeon.tiles.map,
                             gmap.dungeon_spawn.col,
                             gmap.dungeon_spawn.row,
                             .stairs_up,
                         );
+                        self.dungeon.obj_map.place(
+                            &self.dungeon.tiles.map,
+                            gmap.dungeon_diamond.col,
+                            gmap.dungeon_diamond.row,
+                            .diamond,
+                        );
+                    }
                     robot.teleport(gmap.dungeon_spawn);
                     footsteps.clear();
                     footsteps.last_tile = tile;
@@ -86,6 +94,16 @@ pub const WorldState = struct {
                 }
             },
         }
+    }
+
+    /// Returns true (once) when the robot steps onto the diamond.
+    pub fn tryCollectDiamond(self: *WorldState, tile: gmap.TilePos) bool {
+        if (self.diamond_collected) return false;
+        if (self.currentScene() != .dungeon) return false;
+        if (tile.col != gmap.dungeon_diamond.col or tile.row != gmap.dungeon_diamond.row) return false;
+        self.dungeon.obj_map.remove(gmap.dungeon_diamond.col, gmap.dungeon_diamond.row);
+        self.diamond_collected = true;
+        return true;
     }
 
     pub fn draw(self: *WorldState, off_x: f32, off_y: f32) void {

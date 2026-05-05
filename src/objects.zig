@@ -11,7 +11,7 @@ const ROCK_MID = rl.Color.init(138, 132, 125, 255);
 const ROCK_LIGHT = rl.Color.init(175, 170, 163, 255);
 const ROCK_CRACK = rl.Color.init(75, 70, 66, 255);
 
-pub const Kind = enum { tree, rock, rock_large, stairs_down, stairs_up };
+pub const Kind = enum { tree, rock, rock_large, stairs_down, stairs_up, diamond };
 
 const Object = struct { col: i32, row: i32, kind: Kind };
 
@@ -70,7 +70,7 @@ pub const ObjectMap = struct {
             map.blocked[@intCast(row)][@intCast(col + 1)] = true;
             map.blocked[@intCast(row + 1)][@intCast(col)] = true;
             map.blocked[@intCast(row + 1)][@intCast(col + 1)] = true;
-        } else if (kind == .stairs_down or kind == .stairs_up) {
+        } else if (kind == .stairs_down or kind == .stairs_up or kind == .diamond) {
             // Non-blocking — just a visual marker.
             if (map.isBlocked(col, row)) return;
         } else {
@@ -79,6 +79,19 @@ pub const ObjectMap = struct {
         }
         self.objects[self.count] = .{ .col = col, .row = row, .kind = kind };
         self.count += 1;
+    }
+
+    /// Remove the first object at (col, row).
+    pub fn remove(self: *ObjectMap, col: i32, row: i32) void {
+        var i: usize = 0;
+        while (i < self.count) {
+            if (self.objects[i].col == col and self.objects[i].row == row) {
+                self.objects[i] = self.objects[self.count - 1];
+                self.count -= 1;
+            } else {
+                i += 1;
+            }
+        }
     }
 
     pub fn draw(self: ObjectMap, map: *const gmap.TileMap, off_x: f32, off_y: f32) void {
@@ -92,6 +105,7 @@ pub const ObjectMap = struct {
                 .rock_large => drawRockLarge(x, y),
                 .stairs_down => drawStairsDown(x, y),
                 .stairs_up => drawStairsUp(x, y),
+                .diamond => drawDiamond(x, y),
             }
         }
     }
@@ -161,4 +175,39 @@ fn drawStairsUp(x: f32, y: f32) void {
         rl.drawRectangle(sx, sy, w, 4, step);
         rl.drawRectangle(sx, sy + 4, w, 1, shadow);
     }
+}
+
+fn drawDiamond(x: f32, y: f32) void {
+    const t: f32 = @floatCast(rl.getTime());
+    const pulse: f32 = 0.5 + 0.5 * @sin(t * 2.5);
+    const cx: i32 = @intFromFloat(x + gmap.TILE_SIZE_F * 0.5);
+    const cy: i32 = @intFromFloat(y + gmap.TILE_SIZE_F * 0.5 - 1);
+
+    // Drop shadow
+    rl.drawEllipse(cx, cy + 10, 6, 2, rl.Color.init(0, 0, 0, 70));
+
+    // Gem body drawn as rows of rectangles forming a rhombus.
+    // Top half: half-width grows 1..7; bottom half shrinks 7..1.
+    for (0..7) |i| {
+        const fi: i32 = @intCast(i);
+        const hw = fi + 1;
+        const ry = cy - 7 + fi;
+        rl.drawRectangle(cx - hw, ry, hw, 1, rl.Color.init(140, 210, 255, 255)); // left facet (bright)
+        rl.drawRectangle(cx, ry, hw, 1, rl.Color.init(40, 130, 210, 255)); // right facet (dark)
+    }
+    for (0..7) |i| {
+        const fi: i32 = @intCast(i);
+        const hw = 7 - fi;
+        const ry = cy + fi;
+        rl.drawRectangle(cx - hw, ry, hw, 1, rl.Color.init(30, 100, 180, 255)); // lower-left (deep)
+        rl.drawRectangle(cx, ry, hw, 1, rl.Color.init(70, 155, 225, 255)); // lower-right
+    }
+
+    // Animated highlight sparkle on top-left facet
+    const sp_a: u8 = @intFromFloat(pulse * 230.0);
+    rl.drawRectangle(cx - 4, cy - 5, 3, 2, rl.Color.init(220, 245, 255, sp_a));
+
+    // Pulsing outer glow ring
+    const glow_a: u8 = @intFromFloat(pulse * 90.0);
+    rl.drawRectangleLines(cx - 8, cy - 8, 16, 16, rl.Color.init(150, 230, 255, glow_a));
 }
