@@ -16,6 +16,9 @@ const FOG_COLOR = rl.Color.init(0, 0, 0, 255);
 pub const TileMap = struct {
     visible: [ROWS][COLS]bool = std.mem.zeroes([ROWS][COLS]bool),
     blocked: [ROWS][COLS]bool = std.mem.zeroes([ROWS][COLS]bool),
+    /// Newly-revealed tiles waiting to be painted into the cache.
+    pending: [ROWS * COLS][2]u8 = undefined,
+    pending_count: usize = 0,
 
     pub fn isBlocked(self: *const TileMap, col: i32, row: i32) bool {
         if (col < 0 or col >= COLS or row < 0 or row >= ROWS) return true;
@@ -32,7 +35,11 @@ pub const TileMap = struct {
                 const c = tile_col + dx;
                 const r = tile_row + dy;
                 if (c < 0 or c >= COLS or r < 0 or r >= ROWS) continue;
-                self.visible[@intCast(r)][@intCast(c)] = true;
+                if (!self.visible[@intCast(r)][@intCast(c)]) {
+                    self.visible[@intCast(r)][@intCast(c)] = true;
+                    self.pending[self.pending_count] = .{ @intCast(c), @intCast(r) };
+                    self.pending_count += 1;
+                }
             }
         }
     }
@@ -41,22 +48,44 @@ pub const TileMap = struct {
 /// Overworld scene: grassy outdoor map.  Wraps TileMap and owns its drawing.
 pub const OverworldMap = struct {
     map: TileMap = .{},
+    cache: rl.RenderTexture2D = undefined,
+    cache_loaded: bool = false,
 
-    pub fn draw(self: OverworldMap, off_x: f32, off_y: f32) void {
-        const screen_w: f32 = @floatFromInt(rl.getRenderWidth());
-        const screen_h: f32 = @floatFromInt(rl.getRenderHeight());
-        for (0..ROWS) |row| {
-            for (0..COLS) |col| {
-                const x: f32 = off_x + @as(f32, @floatFromInt(col)) * TILE_SIZE_F;
-                const y: f32 = off_y + @as(f32, @floatFromInt(row)) * TILE_SIZE_F;
-                if (x + TILE_SIZE_F < 0 or x > screen_w or y + TILE_SIZE_F < 0 or y > screen_h) continue;
-                const color = if (self.map.visible[row][col])
-                    if ((row + col) % 2 == 0) GRASS_LIGHT else GRASS_DARK
-                else
-                    FOG_COLOR;
-                rl.drawRectangleRec(.{ .x = x, .y = y, .width = TILE_SIZE_F, .height = TILE_SIZE_F }, color);
-            }
+    pub fn updateCache(self: *OverworldMap) void {
+        const map_w: i32 = @as(i32, @intCast(COLS)) * TILE_SIZE;
+        const map_h: i32 = @as(i32, @intCast(ROWS)) * TILE_SIZE;
+        if (!self.cache_loaded) {
+            self.cache = rl.loadRenderTexture(map_w, map_h) catch unreachable;
+            self.cache_loaded = true;
+            self.cache.begin();
+            rl.clearBackground(FOG_COLOR);
+            self.cache.end();
         }
+        if (self.map.pending_count == 0) return;
+        self.cache.begin();
+        for (self.map.pending[0..self.map.pending_count]) |p| {
+            const col: usize = p[0];
+            const row: usize = p[1];
+            const x: f32 = @as(f32, @floatFromInt(col)) * TILE_SIZE_F;
+            const y: f32 = @as(f32, @floatFromInt(row)) * TILE_SIZE_F;
+            const color = if ((row + col) % 2 == 0) GRASS_LIGHT else GRASS_DARK;
+            rl.drawRectangleRec(.{ .x = x, .y = y, .width = TILE_SIZE_F, .height = TILE_SIZE_F }, color);
+        }
+        self.cache.end();
+        self.map.pending_count = 0;
+    }
+
+    pub fn draw(self: *OverworldMap, off_x: f32, off_y: f32) void {
+        const map_w: f32 = @as(f32, @floatFromInt(@as(i32, @intCast(COLS)) * TILE_SIZE));
+        const map_h: f32 = @as(f32, @floatFromInt(@as(i32, @intCast(ROWS)) * TILE_SIZE));
+        rl.drawTexturePro(
+            self.cache.texture,
+            .{ .x = 0, .y = 0, .width = map_w, .height = -map_h },
+            .{ .x = off_x, .y = off_y, .width = map_w, .height = map_h },
+            .{ .x = 0, .y = 0 },
+            0,
+            .white,
+        );
     }
 };
 
@@ -144,6 +173,8 @@ fn drawWallTile(xi: i32, yi: i32, col: usize, row: usize) void {
 pub const DungeonMap = struct {
     map: TileMap = .{},
     generated: bool = false,
+    cache: rl.RenderTexture2D = undefined,
+    cache_loaded: bool = false,
 
     pub fn ensureGenerated(self: *DungeonMap) void {
         if (self.generated) return;
@@ -207,25 +238,49 @@ pub const DungeonMap = struct {
         }
     }
 
-    pub fn draw(self: *const DungeonMap, off_x: f32, off_y: f32) void {
-        const screen_w: f32 = @floatFromInt(rl.getRenderWidth());
-        const screen_h: f32 = @floatFromInt(rl.getRenderHeight());
+    pub fn draw(self: *DungeonMap, off_x: f32, off_y: f32) void {
+        const map_w: f32 = @as(f32, @floatFromInt(@as(i32, @intCast(COLS)) * TILE_SIZE));
+        const map_h: f32 = @as(f32, @floatFromInt(@as(i32, @intCast(ROWS)) * TILE_SIZE));
+        rl.drawTexturePro(
+            self.cache.texture,
+            .{ .x = 0, .y = 0, .width = map_w, .height = -map_h },
+            .{ .x = off_x, .y = off_y, .width = map_w, .height = map_h },
+            .{ .x = 0, .y = 0 },
+            0,
+            .white,
+        );
+    }
 
-        for (0..ROWS) |row| {
-            for (0..COLS) |col| {
-                const x = off_x + @as(f32, @floatFromInt(col)) * TILE_SIZE_F;
-                const y = off_y + @as(f32, @floatFromInt(row)) * TILE_SIZE_F;
-                if (x + TILE_SIZE_F < 0 or x > screen_w or y + TILE_SIZE_F < 0 or y > screen_h) continue;
-
-                if (!self.map.visible[row][col]) {
-                    rl.drawRectangleRec(.{ .x = x, .y = y, .width = TILE_SIZE_F, .height = TILE_SIZE_F }, FOG_COLOR);
-                } else if (self.map.blocked[row][col]) {
-                    drawWallTile(@intFromFloat(x), @intFromFloat(y), col, row);
-                } else {
-                    const floor_color = if ((row + col) % 2 == 0) FLOOR_EVEN else FLOOR_ODD;
-                    rl.drawRectangleRec(.{ .x = x, .y = y, .width = TILE_SIZE_F, .height = TILE_SIZE_F }, floor_color);
-                }
+    pub fn updateCache(self: *DungeonMap) void {
+        const map_w: i32 = @as(i32, @intCast(COLS)) * TILE_SIZE;
+        const map_h: i32 = @as(i32, @intCast(ROWS)) * TILE_SIZE;
+        if (!self.cache_loaded) {
+            self.cache = rl.loadRenderTexture(map_w, map_h) catch unreachable;
+            self.cache_loaded = true;
+            self.cache.begin();
+            rl.clearBackground(FOG_COLOR);
+            self.cache.end();
+        }
+        if (self.map.pending_count == 0) return;
+        self.cache.begin();
+        for (self.map.pending[0..self.map.pending_count]) |p| {
+            const col: usize = p[0];
+            const row: usize = p[1];
+            const xi: i32 = @as(i32, @intCast(col)) * TILE_SIZE;
+            const yi: i32 = @as(i32, @intCast(row)) * TILE_SIZE;
+            if (self.map.blocked[row][col]) {
+                drawWallTile(xi, yi, col, row);
+            } else {
+                const floor_color = if ((row + col) % 2 == 0) FLOOR_EVEN else FLOOR_ODD;
+                rl.drawRectangleRec(.{
+                    .x = @floatFromInt(xi),
+                    .y = @floatFromInt(yi),
+                    .width = TILE_SIZE_F,
+                    .height = TILE_SIZE_F,
+                }, floor_color);
             }
         }
+        self.cache.end();
+        self.map.pending_count = 0;
     }
 };

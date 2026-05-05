@@ -119,4 +119,21 @@ pub const WorldState = struct {
             },
         }
     }
+
+    /// Update tile render-texture caches for the current scene.
+    /// Must be called BEFORE beginDrawing each frame.
+    pub fn prepareFrameCache(self: *WorldState) void {
+        switch (self.currentScene()) {
+            .overworld => {
+                if (self.overworld.tiles.map.pending_count > 0) self.overworld.obj_map.markDirty();
+                self.overworld.tiles.updateCache();
+                self.overworld.obj_map.updateCache(&self.overworld.tiles.map);
+            },
+            .dungeon => {
+                if (self.dungeon.tiles.map.pending_count > 0) self.dungeon.obj_map.markDirty();
+                self.dungeon.tiles.updateCache();
+                self.dungeon.obj_map.updateCache(&self.dungeon.tiles.map);
+            },
+        }
+    }
 };

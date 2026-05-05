@@ -20,6 +20,13 @@ const MAX_OBJECTS = 512;
 pub const ObjectMap = struct {
     objects: [MAX_OBJECTS]Object = undefined,
     count: usize = 0,
+    cache: rl.RenderTexture2D = undefined,
+    cache_loaded: bool = false,
+    dirty: bool = true,
+
+    pub fn markDirty(self: *ObjectMap) void {
+        self.dirty = true;
+    }
 
     pub fn scatter(self: *ObjectMap, map: *gmap.TileMap) void {
         const half_col: i32 = @intCast(gmap.COLS / 2);
@@ -79,6 +86,7 @@ pub const ObjectMap = struct {
         }
         self.objects[self.count] = .{ .col = col, .row = row, .kind = kind };
         self.count += 1;
+        self.dirty = true;
     }
 
     /// Remove the first object at (col, row).
@@ -92,20 +100,67 @@ pub const ObjectMap = struct {
                 i += 1;
             }
         }
+        self.dirty = true;
     }
 
-    pub fn draw(self: ObjectMap, map: *const gmap.TileMap, off_x: f32, off_y: f32) void {
+    /// Rebuild the static-object cache into a render texture.
+    /// Call before beginDrawing() each frame, after tile caches are updated.
+    pub fn updateCache(self: *ObjectMap, map: *const gmap.TileMap) void {
+        const map_w: i32 = @as(i32, @intCast(gmap.COLS)) * gmap.TILE_SIZE;
+        const map_h: i32 = @as(i32, @intCast(gmap.ROWS)) * gmap.TILE_SIZE;
+        if (!self.cache_loaded) {
+            self.cache = rl.loadRenderTexture(map_w, map_h) catch unreachable;
+            self.cache_loaded = true;
+        }
+        if (!self.dirty) return;
+        self.dirty = false;
+        self.cache.begin();
+        rl.clearBackground(rl.Color.init(0, 0, 0, 0));
         for (self.objects[0..self.count]) |obj| {
+            switch (obj.kind) {
+                .diamond, .stairs_down, .stairs_up => continue, // drawn live
+                else => {},
+            }
             if (!map.visible[@intCast(obj.row)][@intCast(obj.col)]) continue;
-            const x = off_x + @as(f32, @floatFromInt(obj.col)) * gmap.TILE_SIZE_F;
-            const y = off_y + @as(f32, @floatFromInt(obj.row)) * gmap.TILE_SIZE_F;
+            const x = @as(f32, @floatFromInt(obj.col)) * gmap.TILE_SIZE_F;
+            const y = @as(f32, @floatFromInt(obj.row)) * gmap.TILE_SIZE_F;
             switch (obj.kind) {
                 .tree => drawTree(x, y),
                 .rock => drawRock(x, y),
                 .rock_large => drawRockLarge(x, y),
+                else => unreachable,
+            }
+        }
+        self.cache.end();
+    }
+
+    pub fn draw(self: *ObjectMap, map: *const gmap.TileMap, off_x: f32, off_y: f32) void {
+        if (self.cache_loaded) {
+            const map_w: f32 = @as(f32, @floatFromInt(@as(i32, @intCast(gmap.COLS)) * gmap.TILE_SIZE));
+            const map_h: f32 = @as(f32, @floatFromInt(@as(i32, @intCast(gmap.ROWS)) * gmap.TILE_SIZE));
+            rl.drawTexturePro(
+                self.cache.texture,
+                .{ .x = 0, .y = 0, .width = map_w, .height = -map_h },
+                .{ .x = off_x, .y = off_y, .width = map_w, .height = map_h },
+                .{ .x = 0, .y = 0 },
+                0,
+                .white,
+            );
+        }
+        // Animated / orientation-sensitive objects drawn live every frame.
+        for (self.objects[0..self.count]) |obj| {
+            switch (obj.kind) {
+                .diamond, .stairs_down, .stairs_up => {},
+                else => continue,
+            }
+            if (!map.visible[@intCast(obj.row)][@intCast(obj.col)]) continue;
+            const x = off_x + @as(f32, @floatFromInt(obj.col)) * gmap.TILE_SIZE_F;
+            const y = off_y + @as(f32, @floatFromInt(obj.row)) * gmap.TILE_SIZE_F;
+            switch (obj.kind) {
                 .stairs_down => drawStairsDown(x, y),
                 .stairs_up => drawStairsUp(x, y),
                 .diamond => drawDiamond(x, y),
+                else => unreachable,
             }
         }
     }

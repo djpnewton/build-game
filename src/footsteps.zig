@@ -2,18 +2,17 @@ const rl = @import("raylib");
 const gmap = @import("map.zig");
 const robot_mod = @import("robot.zig");
 
-const FADE_FRAMES: f32 = 3000;
-const MAX_STEPS = 256;
+const MAX_STEPS = 255;
 const DOT_RADIUS: f32 = 1.5;
 const DOTS_PER_HALF = 3;
 const FOOT_OFFSET_Y: f32 = 8.0;
+const MAP_PX: i32 = @as(i32, @intCast(gmap.COLS)) * gmap.TILE_SIZE;
 
 const Step = struct {
     col: i32,
     row: i32,
     entry_dir: robot_mod.Dir,
     exit_dir: robot_mod.Dir,
-    age: f32,
     exited: bool,
 };
 
@@ -56,6 +55,9 @@ pub const Footsteps = struct {
     steps: [MAX_STEPS]Step = undefined,
     count: usize = 0,
     last_tile: gmap.TilePos = .{ .col = -9999, .row = -9999 },
+    cache: rl.RenderTexture2D = undefined,
+    cache_loaded: bool = false,
+    dirty: bool = true,
 
     pub fn resetLastTile(self: *Footsteps) void {
         self.last_tile = .{ .col = -9999, .row = -9999 };
@@ -64,6 +66,7 @@ pub const Footsteps = struct {
     pub fn clear(self: *Footsteps) void {
         self.count = 0;
         self.resetLastTile();
+        self.dirty = true;
     }
 
     pub fn update(self: *Footsteps, tile: gmap.TilePos, dir: robot_mod.Dir) void {
@@ -83,7 +86,7 @@ pub const Footsteps = struct {
                 self.steps[self.count - 1].exit_dir = dir;
             }
             self.last_tile = tile;
-            const new_step = Step{ .col = tile.col, .row = tile.row, .entry_dir = dir, .exit_dir = dir, .age = 0, .exited = false };
+            const new_step = Step{ .col = tile.col, .row = tile.row, .entry_dir = dir, .exit_dir = dir, .exited = false };
             if (self.count < MAX_STEPS) {
                 self.steps[self.count] = new_step;
                 self.count += 1;
@@ -91,24 +94,24 @@ pub const Footsteps = struct {
                 for (1..MAX_STEPS) |i| self.steps[i - 1] = self.steps[i];
                 self.steps[MAX_STEPS - 1] = new_step;
             }
+            self.dirty = true;
         }
-        for (self.steps[0..self.count]) |*s| s.age += 1;
-        var keep: usize = 0;
-        for (self.steps[0..self.count]) |s| {
-            if (s.age < FADE_FRAMES) {
-                self.steps[keep] = s;
-                keep += 1;
-            }
-        }
-        self.count = keep;
     }
 
-    pub fn draw(self: Footsteps, off_x: f32, off_y: f32) void {
-        for (self.steps[0..self.count]) |s| {
-            const fade = 1.0 - (s.age / FADE_FRAMES);
-            const alpha: u8 = @intFromFloat(fade * 210);
-            const cx = off_x + (@as(f32, @floatFromInt(s.col)) + 0.5) * gmap.TILE_SIZE_F;
-            const cy = off_y + (@as(f32, @floatFromInt(s.row)) + 0.5) * gmap.TILE_SIZE_F + FOOT_OFFSET_Y;
+    pub fn updateCache(self: *Footsteps) void {
+        if (!self.dirty) return;
+        if (!self.cache_loaded) {
+            self.cache = rl.loadRenderTexture(MAP_PX, MAP_PX) catch unreachable;
+            self.cache_loaded = true;
+        }
+        rl.beginTextureMode(self.cache);
+        rl.clearBackground(rl.Color.blank);
+        const count = self.count;
+        for (self.steps[0..count], 0..) |s, i| {
+            const fade: f32 = @as(f32, @floatFromInt(i + 1)) / @as(f32, @floatFromInt(count));
+            const alpha: u8 = @intFromFloat(fade * 210.0);
+            const cx = (@as(f32, @floatFromInt(s.col)) + 0.5) * gmap.TILE_SIZE_F;
+            const cy = (@as(f32, @floatFromInt(s.row)) + 0.5) * gmap.TILE_SIZE_F + FOOT_OFFSET_Y;
             const center = rl.Vector2{ .x = cx, .y = cy };
             const seed: u32 = @as(u32, @bitCast(s.col *% 73856093 +% s.row *% 19349663)) ^ @as(u32, @intFromEnum(s.entry_dir)) *% 83492791;
             const ev = edgeVec(s.entry_dir);
@@ -125,5 +128,20 @@ pub const Footsteps = struct {
                 drawDots(center, exit_pt, DOTS_PER_HALF, seed ^ @as(u32, @intFromEnum(s.exit_dir)) *% 374761393, fade, alpha);
             }
         }
+        rl.endTextureMode();
+        self.dirty = false;
+    }
+
+    pub fn draw(self: Footsteps, off_x: f32, off_y: f32) void {
+        if (!self.cache_loaded) return;
+        const map_px_f: f32 = @floatFromInt(MAP_PX);
+        rl.drawTexturePro(
+            self.cache.texture,
+            .{ .x = 0, .y = 0, .width = map_px_f, .height = -map_px_f },
+            .{ .x = off_x, .y = off_y, .width = map_px_f, .height = map_px_f },
+            .{ .x = 0, .y = 0 },
+            0,
+            .white,
+        );
     }
 };

@@ -89,6 +89,8 @@ pub fn main(_: std.process.Init) !void {
 
         // Draw
         //------------------------------------------------------------------------------------
+        world.prepareFrameCache(); // update tile caches before opening the framebuffer
+        footsteps.updateCache();
         rl.beginDrawing();
         defer rl.endDrawing();
         rl.clearBackground(ut.getBackgroundColor());
@@ -98,6 +100,15 @@ pub fn main(_: std.process.Init) !void {
         anim.draw(off.x, off.y);
         robot.draw(off.x, off.y);
         input.drawJoystick();
+
+        // FPS counter – top-right corner
+        const fps = rl.getFPS();
+        var fps_buf: [16]u8 = undefined;
+        const fps_str = std.fmt.bufPrintZ(&fps_buf, "{d} FPS", .{fps}) catch "? FPS";
+        const fs: i32 = 14;
+        const fw = rl.measureText(fps_str, fs);
+        rl.drawText(fps_str, rl.getRenderWidth() - fw - 5, 7, fs, rl.Color.init(0, 0, 0, 180));
+        rl.drawText(fps_str, rl.getRenderWidth() - fw - 6, 6, fs, rl.Color.init(255, 255, 255, 180));
 
         if (show_congrats) {
             const sw: i32 = rl.getRenderWidth();
