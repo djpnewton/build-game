@@ -13,7 +13,7 @@ const ROCK_CRACK = rl.Color.init(75, 70, 66, 255);
 
 pub const Kind = enum { tree, rock, rock_large, stairs_down, stairs_up, diamond };
 
-const Object = struct { col: i32, row: i32, kind: Kind };
+const Object = struct { col: i32, row: i32, kind: Kind, hits: u8 = 0 };
 
 const MAX_OBJECTS = 512;
 
@@ -89,6 +89,31 @@ pub const ObjectMap = struct {
         self.dirty = true;
     }
 
+    pub fn findKindAt(self: *const ObjectMap, col: i32, row: i32) ?Kind {
+        for (self.objects[0..self.count]) |obj| {
+            if (obj.col == col and obj.row == row) return obj.kind;
+        }
+        return null;
+    }
+
+    /// Remove a tree at (col, row) and unblock the tile.
+    /// Hit a tree at (col, row). Falls after 3 chops.
+    pub fn chop(self: *ObjectMap, map: *gmap.TileMap, col: i32, row: i32) void {
+        var i: usize = 0;
+        while (i < self.count) : (i += 1) {
+            if (self.objects[i].col == col and self.objects[i].row == row and self.objects[i].kind == .tree) {
+                self.objects[i].hits += 1;
+                self.dirty = true;
+                if (self.objects[i].hits >= 3) {
+                    map.blocked[@intCast(row)][@intCast(col)] = false;
+                    self.objects[i] = self.objects[self.count - 1];
+                    self.count -= 1;
+                }
+                return;
+            }
+        }
+    }
+
     /// Remove the first object at (col, row).
     pub fn remove(self: *ObjectMap, col: i32, row: i32) void {
         var i: usize = 0;
@@ -125,7 +150,7 @@ pub const ObjectMap = struct {
             const x = @as(f32, @floatFromInt(obj.col)) * gmap.TILE_SIZE_F;
             const y = @as(f32, @floatFromInt(obj.row)) * gmap.TILE_SIZE_F;
             switch (obj.kind) {
-                .tree => drawTree(x, y),
+                .tree => drawTree(x, y, obj.hits),
                 .rock => drawRock(x, y),
                 .rock_large => drawRockLarge(x, y),
                 else => unreachable,
@@ -166,14 +191,31 @@ pub const ObjectMap = struct {
     }
 };
 
-fn drawTree(x: f32, y: f32) void {
+fn drawTree(x: f32, y: f32, hits: u8) void {
     const cx: i32 = @intFromFloat(x + gmap.TILE_SIZE_F * 0.5);
     const cy: i32 = @intFromFloat(y + gmap.TILE_SIZE_F * 0.5);
-    // Trunk: small brown rectangle at the bottom-centre of the tile
-    rl.drawRectangle(cx - 3, cy + 5, 6, 9, TRUNK_COLOR);
-    // Foliage: two circles for a bit of depth
+    // Foliage — always full size
     rl.drawCircle(cx, cy - 1, 11, FOLIAGE_DARK);
     rl.drawCircle(cx, cy - 3, 8, FOLIAGE_LIGHT);
+    // Trunk
+    rl.drawRectangle(cx - 3, cy + 5, 6, 9, TRUNK_COLOR);
+    // Axe-gash damage marks drawn on top of trunk
+    const GASH = rl.Color.init(28, 15, 6, 255);
+    const WOOD = rl.Color.init(200, 155, 88, 220);
+    if (hits >= 1) {
+        // Right-side V notch, mid-trunk
+        rl.drawLine(cx + 3, cy + 6, cx, cy + 8, GASH);
+        rl.drawLine(cx + 3, cy + 10, cx, cy + 8, GASH);
+        rl.drawLine(cx + 1, cy + 7, cx + 3, cy + 8, WOOD);
+        rl.drawLine(cx + 1, cy + 9, cx + 3, cy + 8, WOOD);
+    }
+    if (hits >= 2) {
+        // Left-side V notch, lower trunk
+        rl.drawLine(cx - 3, cy + 9, cx, cy + 11, GASH);
+        rl.drawLine(cx - 3, cy + 13, cx, cy + 11, GASH);
+        rl.drawLine(cx - 1, cy + 10, cx - 3, cy + 11, WOOD);
+        rl.drawLine(cx - 1, cy + 12, cx - 3, cy + 11, WOOD);
+    }
 }
 
 fn drawRock(x: f32, y: f32) void {

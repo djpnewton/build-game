@@ -69,16 +69,28 @@ pub fn main(_: std.process.Init) !void {
                 if (click_col >= 0 and click_col < gmap.COLS and
                     click_row >= 0 and click_row < gmap.ROWS)
                 {
-                    const start = gmap.tileFromPos(robot.pos);
-                    const n = pathfinding.findPathTo(
-                        active_map,
-                        start,
-                        .{ .col = click_col, .row = click_row },
-                        &path_buf,
-                    );
-                    if (n > 0) {
-                        robot.setPath(path_buf[0..n]);
-                        anim.startRipple(path_buf[n - 1].col, path_buf[n - 1].row);
+                    const tap_tile = gmap.TilePos{ .col = click_col, .row = click_row };
+                    if (world.activeObjMap().findKindAt(click_col, click_row) == .tree) {
+                        if (isAdjacent(tile, tap_tile)) {
+                            // Already beside the tree — chop it.
+                            world.activeObjMap().chop(active_map, click_col, click_row);
+                            anim.startChop(click_col, click_row);
+                        } else if (findAdjacentWalkable(active_map, click_col, click_row)) |adj| {
+                            // Navigate toward the tree; player taps again to chop.
+                            const start = gmap.tileFromPos(robot.pos);
+                            const n = pathfinding.findPathTo(active_map, start, adj, &path_buf);
+                            if (n > 0) {
+                                robot.setPath(path_buf[0..n]);
+                                anim.startRipple(adj.col, adj.row);
+                            }
+                        }
+                    } else {
+                        const start = gmap.tileFromPos(robot.pos);
+                        const n = pathfinding.findPathTo(active_map, start, tap_tile, &path_buf);
+                        if (n > 0) {
+                            robot.setPath(path_buf[0..n]);
+                            anim.startRipple(path_buf[n - 1].col, path_buf[n - 1].row);
+                        }
                     }
                 }
             }
@@ -137,4 +149,21 @@ pub fn main(_: std.process.Init) !void {
             rl.drawText(hint, px + @divFloor(pw - hint_w, 2), py + 148, hint_fs, rl.Color.init(180, 180, 180, blink_a));
         }
     }
+}
+
+fn isAdjacent(a: gmap.TilePos, b: gmap.TilePos) bool {
+    const dc = a.col - b.col;
+    const dr = a.row - b.row;
+    return dc >= -1 and dc <= 1 and dr >= -1 and dr <= 1 and (dc != 0 or dr != 0);
+}
+
+fn findAdjacentWalkable(map: *const gmap.TileMap, col: i32, row: i32) ?gmap.TilePos {
+    const deltas = [_][2]i32{ .{ 0, -1 }, .{ 0, 1 }, .{ -1, 0 }, .{ 1, 0 }, .{ -1, -1 }, .{ 1, -1 }, .{ -1, 1 }, .{ 1, 1 } };
+    for (deltas) |d| {
+        const nc = col + d[0];
+        const nr = row + d[1];
+        if (nc < 0 or nc >= gmap.COLS or nr < 0 or nr >= gmap.ROWS) continue;
+        if (!map.isBlocked(nc, nr)) return .{ .col = nc, .row = nr };
+    }
+    return null;
 }

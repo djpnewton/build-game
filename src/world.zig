@@ -41,6 +41,13 @@ pub const WorldState = struct {
         };
     }
 
+    pub fn activeObjMap(self: *WorldState) *objects_mod.ObjectMap {
+        return switch (self.currentScene()) {
+            .overworld => &self.overworld.obj_map,
+            .dungeon => &self.dungeon.obj_map,
+        };
+    }
+
     pub fn trySceneTransition(
         self: *WorldState,
         tile: gmap.TilePos,
