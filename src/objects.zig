@@ -100,8 +100,9 @@ pub const ObjectMap = struct {
         return null;
     }
 
-    /// Hit a choppable object at (col, row). Removes it when hit limit is reached.
-    pub fn chop(self: *ObjectMap, map: *gmap.TileMap, col: i32, row: i32) void {
+    /// Hit a choppable object at (col, row).
+    /// Returns the Kind that was destroyed, or null if it was just a hit.
+    pub fn chop(self: *ObjectMap, map: *gmap.TileMap, col: i32, row: i32) ?Kind {
         var i: usize = 0;
         while (i < self.count) : (i += 1) {
             const obj = &self.objects[i];
@@ -115,23 +116,25 @@ pub const ObjectMap = struct {
                 .tree => 3,
                 .rock => 4,
                 .rock_large => 12,
-                else => return,
+                else => return null,
             };
             obj.hits += 1;
             self.dirty = true;
             if (obj.hits >= max_hits) {
-                // Unblock tile(s)
-                map.blocked[@intCast(row)][@intCast(col)] = false;
+                const destroyed_kind = obj.kind;
+                map.blocked[@intCast(obj.row)][@intCast(obj.col)] = false;
                 if (obj.kind == .rock_large) {
-                    map.blocked[@intCast(row)][@intCast(col + 1)] = false;
-                    map.blocked[@intCast(row + 1)][@intCast(col)] = false;
-                    map.blocked[@intCast(row + 1)][@intCast(col + 1)] = false;
+                    map.blocked[@intCast(obj.row)][@intCast(obj.col + 1)] = false;
+                    map.blocked[@intCast(obj.row + 1)][@intCast(obj.col)] = false;
+                    map.blocked[@intCast(obj.row + 1)][@intCast(obj.col + 1)] = false;
                 }
                 self.objects[i] = self.objects[self.count - 1];
                 self.count -= 1;
+                return destroyed_kind;
             }
-            return;
+            return null;
         }
+        return null;
     }
 
     /// Remove the first object at (col, row).

@@ -12,6 +12,7 @@ const footsteps_mod = @import("footsteps.zig");
 const camera_mod = @import("camera.zig");
 const pathfinding = @import("pathfinding.zig");
 const anim = @import("animations.zig");
+const inventory = @import("inventory.zig");
 
 pub fn main(_: std.process.Init) !void {
     // Initialization
@@ -74,8 +75,14 @@ pub fn main(_: std.process.Init) !void {
                     const choppable = kind_at == .tree or kind_at == .rock or kind_at == .rock_large;
                     if (choppable) {
                         if (isAdjacent(tile, tap_tile)) {
-                            world.activeObjMap().chop(active_map, click_col, click_row);
+                            const destroyed = world.activeObjMap().chop(active_map, click_col, click_row);
                             anim.startChop(click_col, click_row);
+                            if (destroyed) |k| switch (k) {
+                                .tree => inventory.addWood(1, click_col, click_row),
+                                .rock => inventory.addStone(1, click_col, click_row),
+                                .rock_large => inventory.addStone(4, click_col, click_row),
+                                else => {},
+                            };
                         } else if (findAdjacentWalkable(active_map, click_col, click_row)) |adj| {
                             // Navigate toward the object; player taps again to chop.
                             const start = gmap.tileFromPos(robot.pos);
@@ -99,6 +106,7 @@ pub fn main(_: std.process.Init) !void {
             if (@intFromEnum(rl.getKeyPressed()) != 0 or input.consumeTap() != null) show_congrats = false;
         }
         anim.update();
+        inventory.update();
 
         // Draw
         //------------------------------------------------------------------------------------
@@ -113,6 +121,8 @@ pub fn main(_: std.process.Init) !void {
         anim.draw(off.x, off.y);
         robot.draw(off.x, off.y);
         input.drawJoystick();
+        inventory.draw();
+        inventory.drawPopups(off.x, off.y);
 
         // FPS counter – top-right corner
         const fps = rl.getFPS();
