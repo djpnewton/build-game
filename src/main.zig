@@ -70,13 +70,14 @@ pub fn main(_: std.process.Init) !void {
                     click_row >= 0 and click_row < gmap.ROWS)
                 {
                     const tap_tile = gmap.TilePos{ .col = click_col, .row = click_row };
-                    if (world.activeObjMap().findKindAt(click_col, click_row) == .tree) {
+                    const kind_at = world.activeObjMap().findKindAt(click_col, click_row);
+                    const choppable = kind_at == .tree or kind_at == .rock or kind_at == .rock_large;
+                    if (choppable) {
                         if (isAdjacent(tile, tap_tile)) {
-                            // Already beside the tree — chop it.
                             world.activeObjMap().chop(active_map, click_col, click_row);
                             anim.startChop(click_col, click_row);
                         } else if (findAdjacentWalkable(active_map, click_col, click_row)) |adj| {
-                            // Navigate toward the tree; player taps again to chop.
+                            // Navigate toward the object; player taps again to chop.
                             const start = gmap.tileFromPos(robot.pos);
                             const n = pathfinding.findPathTo(active_map, start, adj, &path_buf);
                             if (n > 0) {

@@ -92,25 +92,45 @@ pub const ObjectMap = struct {
     pub fn findKindAt(self: *const ObjectMap, col: i32, row: i32) ?Kind {
         for (self.objects[0..self.count]) |obj| {
             if (obj.col == col and obj.row == row) return obj.kind;
+            // Large rock occupies a 2×2 block anchored at (obj.col, obj.row)
+            if (obj.kind == .rock_large and
+                col >= obj.col and col <= obj.col + 1 and
+                row >= obj.row and row <= obj.row + 1) return obj.kind;
         }
         return null;
     }
 
-    /// Remove a tree at (col, row) and unblock the tile.
-    /// Hit a tree at (col, row). Falls after 3 chops.
+    /// Hit a choppable object at (col, row). Removes it when hit limit is reached.
     pub fn chop(self: *ObjectMap, map: *gmap.TileMap, col: i32, row: i32) void {
         var i: usize = 0;
         while (i < self.count) : (i += 1) {
-            if (self.objects[i].col == col and self.objects[i].row == row and self.objects[i].kind == .tree) {
-                self.objects[i].hits += 1;
-                self.dirty = true;
-                if (self.objects[i].hits >= 3) {
-                    map.blocked[@intCast(row)][@intCast(col)] = false;
-                    self.objects[i] = self.objects[self.count - 1];
-                    self.count -= 1;
+            const obj = &self.objects[i];
+            // Match anchor tile, or any tile in a 2×2 large rock footprint
+            const matches = (obj.col == col and obj.row == row) or
+                (obj.kind == .rock_large and
+                    col >= obj.col and col <= obj.col + 1 and
+                    row >= obj.row and row <= obj.row + 1);
+            if (!matches) continue;
+            const max_hits: u8 = switch (obj.kind) {
+                .tree => 3,
+                .rock => 4,
+                .rock_large => 12,
+                else => return,
+            };
+            obj.hits += 1;
+            self.dirty = true;
+            if (obj.hits >= max_hits) {
+                // Unblock tile(s)
+                map.blocked[@intCast(row)][@intCast(col)] = false;
+                if (obj.kind == .rock_large) {
+                    map.blocked[@intCast(row)][@intCast(col + 1)] = false;
+                    map.blocked[@intCast(row + 1)][@intCast(col)] = false;
+                    map.blocked[@intCast(row + 1)][@intCast(col + 1)] = false;
                 }
-                return;
+                self.objects[i] = self.objects[self.count - 1];
+                self.count -= 1;
             }
+            return;
         }
     }
 
@@ -151,8 +171,8 @@ pub const ObjectMap = struct {
             const y = @as(f32, @floatFromInt(obj.row)) * gmap.TILE_SIZE_F;
             switch (obj.kind) {
                 .tree => drawTree(x, y, obj.hits),
-                .rock => drawRock(x, y),
-                .rock_large => drawRockLarge(x, y),
+                .rock => drawRock(x, y, obj.hits),
+                .rock_large => drawRockLarge(x, y, obj.hits),
                 else => unreachable,
             }
         }
@@ -218,7 +238,7 @@ fn drawTree(x: f32, y: f32, hits: u8) void {
     }
 }
 
-fn drawRock(x: f32, y: f32) void {
+fn drawRock(x: f32, y: f32, hits: u8) void {
     const cx: i32 = @intFromFloat(x + gmap.TILE_SIZE_F * 0.5);
     const cy: i32 = @intFromFloat(y + gmap.TILE_SIZE_F * 0.5 + 3);
     rl.drawEllipse(cx, cy + 6, 11, 4, rl.Color.init(0, 0, 0, 50));
@@ -227,9 +247,12 @@ fn drawRock(x: f32, y: f32) void {
     rl.drawEllipse(cx - 1, cy - 3, 3, 2, ROCK_LIGHT);
     rl.drawLine(cx + 2, cy - 1, cx + 6, cy + 4, ROCK_CRACK);
     rl.drawLine(cx - 4, cy + 1, cx - 1, cy + 5, ROCK_CRACK);
+    if (hits >= 1) rl.drawLine(cx - 1, cy - 5, cx + 4, cy + 2, rl.Color.init(40, 35, 30, 220));
+    if (hits >= 2) rl.drawLine(cx - 5, cy - 2, cx + 1, cy + 6, rl.Color.init(40, 35, 30, 220));
+    if (hits >= 3) rl.drawLine(cx + 3, cy - 4, cx - 2, cy + 7, rl.Color.init(40, 35, 30, 220));
 }
 
-fn drawRockLarge(x: f32, y: f32) void {
+fn drawRockLarge(x: f32, y: f32, hits: u8) void {
     const cx: i32 = @intFromFloat(x + gmap.TILE_SIZE_F);
     const cy: i32 = @intFromFloat(y + gmap.TILE_SIZE_F + 4);
     rl.drawEllipse(cx, cy + 12, 24, 7, rl.Color.init(0, 0, 0, 50));
@@ -240,6 +263,12 @@ fn drawRockLarge(x: f32, y: f32) void {
     rl.drawLine(cx - 9, cy + 2, cx - 3, cy + 11, ROCK_CRACK);
     rl.drawLine(cx + 1, cy - 12, cx + 7, cy - 4, ROCK_CRACK);
     rl.drawLine(cx - 5, cy - 2, cx + 2, cy + 3, ROCK_CRACK);
+    const deep = rl.Color.init(30, 25, 20, 230);
+    if (hits >= 2) rl.drawLine(cx - 8, cy - 10, cx + 6, cy + 5, deep);
+    if (hits >= 4) rl.drawLine(cx + 8, cy - 8, cx - 4, cy + 9, deep);
+    if (hits >= 6) rl.drawLine(cx - 12, cy + 0, cx + 10, cy + 12, deep);
+    if (hits >= 8) rl.drawLine(cx - 4, cy - 14, cx + 14, cy + 4, deep);
+    if (hits >= 10) rl.drawLine(cx - 14, cy - 4, cx + 4, cy + 14, deep);
 }
 
 fn drawStairsDown(x: f32, y: f32) void {
