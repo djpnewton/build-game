@@ -83,7 +83,7 @@ pub fn main(_: std.process.Init) !void {
                                 .rock_large => inventory.addStone(4, click_col, click_row),
                                 else => {},
                             };
-                        } else if (findAdjacentWalkable(active_map, click_col, click_row)) |adj| {
+                        } else if (findBestAdjacentWalkable(active_map, click_col, click_row, tile, &path_buf)) |adj| {
                             // Navigate toward the object; player taps again to chop.
                             const start = gmap.tileFromPos(robot.pos);
                             const n = pathfinding.findPathTo(active_map, start, adj, &path_buf);
@@ -168,13 +168,27 @@ fn isAdjacent(a: gmap.TilePos, b: gmap.TilePos) bool {
     return dc >= -1 and dc <= 1 and dr >= -1 and dr <= 1 and (dc != 0 or dr != 0);
 }
 
-fn findAdjacentWalkable(map: *const gmap.TileMap, col: i32, row: i32) ?gmap.TilePos {
+fn findBestAdjacentWalkable(
+    map: *const gmap.TileMap,
+    col: i32,
+    row: i32,
+    from: gmap.TilePos,
+    path_buf: []gmap.TilePos,
+) ?gmap.TilePos {
     const deltas = [_][2]i32{ .{ 0, -1 }, .{ 0, 1 }, .{ -1, 0 }, .{ 1, 0 }, .{ -1, -1 }, .{ 1, -1 }, .{ -1, 1 }, .{ 1, 1 } };
+    var best: ?gmap.TilePos = null;
+    var best_len: usize = std.math.maxInt(usize);
     for (deltas) |d| {
         const nc = col + d[0];
         const nr = row + d[1];
         if (nc < 0 or nc >= gmap.COLS or nr < 0 or nr >= gmap.ROWS) continue;
-        if (!map.isBlocked(nc, nr)) return .{ .col = nc, .row = nr };
+        if (map.isBlocked(nc, nr)) continue;
+        const cand = gmap.TilePos{ .col = nc, .row = nr };
+        const n = pathfinding.findPathTo(map, from, cand, path_buf);
+        if (n > 0 and n < best_len) {
+            best_len = n;
+            best = cand;
+        }
     }
-    return null;
+    return best;
 }
