@@ -110,8 +110,17 @@ pub fn tileFromPos(robot_pos: rl.Vector2) TilePos {
 pub const overworld_entrance: TilePos = .{ .col = 14, .row = 14 };
 /// Tile in the dungeon where the robot spawns (also the exit stairs).
 pub const dungeon_spawn: TilePos = .{ .col = 1, .row = 1 };
-/// Tile in the dungeon where the diamond treasure is placed (far corner).
+/// Diamond — behind gates at the far corner of level 1.
 pub const dungeon_diamond: TilePos = .{ .col = 17, .row = 17 };
+/// Gates on the two carved passages leading into the corner diamond cell.
+pub const dungeon_gate_a: TilePos = .{ .col = 16, .row = 17 }; // from left
+pub const dungeon_gate_b: TilePos = .{ .col = 17, .row = 16 }; // from above
+/// Stairs down to level 2 — centre of level 1 (accessible on the way to the diamond).
+pub const dungeon2_entrance: TilePos = .{ .col = 9, .row = 9 };
+/// Level 2 spawn tile (and exit stairs back to level 1).
+pub const dungeon2_spawn: TilePos = .{ .col = 1, .row = 1 };
+/// Key location — far corner of level 2.
+pub const dungeon2_key: TilePos = .{ .col = 17, .row = 17 };
 
 const CELL_COUNT: usize = 9; // 9×9 cells → tiles 1,3,5…17 per axis
 const NCELLS: i32 = CELL_COUNT;
@@ -172,6 +181,7 @@ fn drawWallTile(xi: i32, yi: i32, col: usize, row: usize) void {
 
 pub const DungeonMap = struct {
     map: TileMap = .{},
+    seed: u64 = 77321,
     generated: bool = false,
     cache: rl.RenderTexture2D = undefined,
     cache_loaded: bool = false,
@@ -196,7 +206,7 @@ pub const DungeonMap = struct {
         var visited: [CELL_COUNT][CELL_COUNT]bool = std.mem.zeroes([CELL_COUNT][CELL_COUNT]bool);
         var stack: [CELL_COUNT * CELL_COUNT][2]u8 = undefined;
         var stack_len: usize = 0;
-        var rng = std.Random.DefaultPrng.init(77321);
+        var rng = std.Random.DefaultPrng.init(self.seed);
         const rand = rng.random();
 
         visited[0][0] = true;

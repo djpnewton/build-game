@@ -11,7 +11,7 @@ const ROCK_MID = rl.Color.init(138, 132, 125, 255);
 const ROCK_LIGHT = rl.Color.init(175, 170, 163, 255);
 const ROCK_CRACK = rl.Color.init(75, 70, 66, 255);
 
-pub const Kind = enum { tree, rock, rock_large, stairs_down, stairs_up, diamond };
+pub const Kind = enum { tree, rock, rock_large, stairs_down, stairs_up, diamond, gate, key };
 
 const Object = struct { col: i32, row: i32, kind: Kind, hits: u8 = 0 };
 
@@ -77,7 +77,7 @@ pub const ObjectMap = struct {
             map.blocked[@intCast(row)][@intCast(col + 1)] = true;
             map.blocked[@intCast(row + 1)][@intCast(col)] = true;
             map.blocked[@intCast(row + 1)][@intCast(col + 1)] = true;
-        } else if (kind == .stairs_down or kind == .stairs_up or kind == .diamond) {
+        } else if (kind == .stairs_down or kind == .stairs_up or kind == .diamond or kind == .key) {
             // Non-blocking — just a visual marker.
             if (map.isBlocked(col, row)) return;
         } else {
@@ -166,7 +166,7 @@ pub const ObjectMap = struct {
         rl.clearBackground(rl.Color.init(0, 0, 0, 0));
         for (self.objects[0..self.count]) |obj| {
             switch (obj.kind) {
-                .diamond, .stairs_down, .stairs_up => continue, // drawn live
+                .diamond, .stairs_down, .stairs_up, .key => continue, // drawn live
                 else => {},
             }
             if (!map.visible[@intCast(obj.row)][@intCast(obj.col)]) continue;
@@ -176,6 +176,7 @@ pub const ObjectMap = struct {
                 .tree => drawTree(x, y, obj.hits),
                 .rock => drawRock(x, y, obj.hits),
                 .rock_large => drawRockLarge(x, y, obj.hits),
+                .gate => drawGate(x, y),
                 else => unreachable,
             }
         }
@@ -198,7 +199,7 @@ pub const ObjectMap = struct {
         // Animated / orientation-sensitive objects drawn live every frame.
         for (self.objects[0..self.count]) |obj| {
             switch (obj.kind) {
-                .diamond, .stairs_down, .stairs_up => {},
+                .diamond, .stairs_down, .stairs_up, .key => {},
                 else => continue,
             }
             if (!map.visible[@intCast(obj.row)][@intCast(obj.col)]) continue;
@@ -208,6 +209,7 @@ pub const ObjectMap = struct {
                 .stairs_down => drawStairsDown(x, y),
                 .stairs_up => drawStairsUp(x, y),
                 .diamond => drawDiamond(x, y),
+                .key => drawKey(x, y),
                 else => unreachable,
             }
         }
@@ -339,4 +341,92 @@ fn drawDiamond(x: f32, y: f32) void {
     // Pulsing outer glow ring
     const glow_a: u8 = @intFromFloat(pulse * 90.0);
     rl.drawRectangleLines(cx - 8, cy - 8, 16, 16, rl.Color.init(150, 230, 255, glow_a));
+}
+
+fn drawGate(x: f32, y: f32) void {
+    const xi: i32 = @intFromFloat(x);
+    const yi: i32 = @intFromFloat(y);
+    const ts = gmap.TILE_SIZE;
+
+    // Floor background — hides the wall tile the cache drew for the blocked cell.
+    const col_idx: usize = @intFromFloat(x / gmap.TILE_SIZE_F);
+    const row_idx: usize = @intFromFloat(y / gmap.TILE_SIZE_F);
+    const floor_color = if ((row_idx + col_idx) % 2 == 0)
+        rl.Color.init(92, 87, 81, 255)
+    else
+        rl.Color.init(82, 77, 71, 255);
+    rl.drawRectangle(xi, yi, ts, ts, floor_color);
+
+    const METAL_DARK = rl.Color.init(70, 78, 88, 255);
+    const METAL_MID = rl.Color.init(118, 128, 142, 255);
+    const METAL_SHEEN = rl.Color.init(178, 188, 202, 255);
+
+    // Top frame bar
+    rl.drawRectangle(xi + 1, yi + 2, ts - 2, 4, METAL_DARK);
+    rl.drawRectangle(xi + 1, yi + 3, ts - 2, 2, METAL_MID);
+    rl.drawLine(xi + 1, yi + 3, xi + ts - 2, yi + 3, METAL_SHEEN);
+
+    // Bottom frame bar
+    rl.drawRectangle(xi + 1, yi + ts - 6, ts - 2, 4, METAL_DARK);
+    rl.drawRectangle(xi + 1, yi + ts - 5, ts - 2, 2, METAL_MID);
+
+    // Four vertical bars
+    const bars = [4]i32{ 4, 11, 18, 25 };
+    for (bars) |bx| {
+        rl.drawRectangle(xi + bx, yi + 2, 3, ts - 4, METAL_DARK);
+        rl.drawRectangle(xi + bx + 1, yi + 2, 1, ts - 4, METAL_MID);
+        rl.drawLine(xi + bx + 1, yi + 3, xi + bx + 1, yi + ts - 5, METAL_SHEEN);
+    }
+
+    // Mid crossbar
+    rl.drawRectangle(xi + 1, yi + ts / 2 - 1, ts - 2, 3, METAL_DARK);
+    rl.drawRectangle(xi + 1, yi + ts / 2, ts - 2, 1, METAL_MID);
+
+    // Keyhole — centred on the tile
+    const kx: i32 = xi + ts / 2;
+    const ky: i32 = yi + ts / 2 - 1;
+    const KH = rl.Color.init(40, 38, 36, 240);
+    rl.drawCircle(kx, ky - 3, 4, KH); // round top
+    rl.drawTriangle( // pointed slot below
+        .{ .x = @floatFromInt(kx - 5), .y = @floatFromInt(ky + 9) },
+        .{ .x = @floatFromInt(kx + 5), .y = @floatFromInt(ky + 9) },
+        .{ .x = @floatFromInt(kx), .y = @floatFromInt(ky - 2) },
+        KH,
+    );
+    // Small highlight inside the circle so it reads as a hole
+    rl.drawCircle(kx - 1, ky - 4, 2, rl.Color.init(60, 55, 50, 120));
+}
+
+fn drawKey(x: f32, y: f32) void {
+    const t: f32 = @floatCast(rl.getTime());
+    const pulse: f32 = 0.5 + 0.5 * @sin(t * 2.0);
+    const cx: i32 = @intFromFloat(x + gmap.TILE_SIZE_F * 0.5);
+    const cy: i32 = @intFromFloat(y + gmap.TILE_SIZE_F * 0.5);
+
+    const GOLD = rl.Color.init(210, 175, 40, 255);
+    const GOLD_DARK = rl.Color.init(145, 115, 20, 255);
+    const GOLD_LIGHT = rl.Color.init(255, 230, 110, 255);
+
+    // Drop shadow
+    rl.drawEllipse(cx + 1, cy + 9, 8, 2, rl.Color.init(0, 0, 0, 60));
+
+    // Handle ring
+    rl.drawCircle(cx - 5, cy - 0, 6, GOLD_DARK);
+    rl.drawCircle(cx - 5, cy - 0, 5, GOLD);
+    rl.drawCircle(cx - 5, cy - 0, 3, GOLD_LIGHT);
+    rl.drawCircle(cx - 5, cy - 0, 2, rl.Color.init(28, 24, 18, 255)); // hole
+
+    // Shaft
+    rl.drawRectangle(cx - 4, cy - 2, 13, 3, GOLD_DARK);
+    rl.drawRectangle(cx - 3, cy - 1, 11, 2, GOLD);
+
+    // Teeth
+    rl.drawRectangle(cx + 3, cy + 1, 3, 3, GOLD_DARK);
+    rl.drawRectangle(cx + 3, cy + 2, 2, 2, GOLD);
+    rl.drawRectangle(cx + 7, cy + 1, 2, 2, GOLD_DARK);
+    rl.drawRectangle(cx + 7, cy + 2, 1, 1, GOLD);
+
+    // Pulsing glow around the ring
+    const glow_a: u8 = @intFromFloat(pulse * 85.0);
+    rl.drawCircleLines(cx - 5, cy - 0, 8, rl.Color.init(255, 230, 80, glow_a));
 }

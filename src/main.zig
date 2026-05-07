@@ -55,6 +55,7 @@ pub fn main(_: std.process.Init) !void {
 
         world.trySceneTransition(tile, &robot, &footsteps);
         if (world.tryCollectDiamond(tile)) show_congrats = true;
+        if (world.tryCollectKey(tile)) inventory.has_key = true;
 
         active_map.revealAround(tile.col, tile.row, 3);
         footsteps.update(tile, robot.dir);
@@ -73,7 +74,21 @@ pub fn main(_: std.process.Init) !void {
                     const tap_tile = gmap.TilePos{ .col = click_col, .row = click_row };
                     const kind_at = world.activeObjMap().findKindAt(click_col, click_row);
                     const choppable = kind_at == .tree or kind_at == .rock or kind_at == .rock_large;
-                    if (choppable) {
+                    const is_gate = kind_at == .gate;
+                    if (is_gate) {
+                        if (world.key_collected) {
+                            if (isAdjacent(tile, tap_tile)) {
+                                _ = world.tryOpenGate(click_col, click_row);
+                            } else if (findBestAdjacentWalkable(active_map, click_col, click_row, tile, &path_buf)) |adj| {
+                                const start = gmap.tileFromPos(robot.pos);
+                                const n = pathfinding.findPathTo(active_map, start, adj, &path_buf);
+                                if (n > 0) {
+                                    robot.setPath(path_buf[0..n]);
+                                    anim.startRipple(adj.col, adj.row);
+                                }
+                            }
+                        }
+                    } else if (choppable) {
                         if (isAdjacent(tile, tap_tile)) {
                             const destroyed = world.activeObjMap().chop(active_map, click_col, click_row);
                             anim.startChop(click_col, click_row);

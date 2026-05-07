@@ -4,6 +4,7 @@ const gmap = @import("map.zig");
 
 pub var wood: u32 = 0;
 pub var stone: u32 = 0;
+pub var has_key: bool = false;
 
 // ── Floating +N popups ────────────────────────────────────────────────────────
 
@@ -60,47 +61,47 @@ const PAD: f32 = 10;
 const ROW_H: f32 = 22;
 const ICON_W: f32 = 18;
 
-fn panelY() f32 {
-    return @as(f32, @floatFromInt(rl.getScreenHeight())) - PAD - ROW_H * 2 - 6;
-}
-
-fn woodIconPos() [2]f32 {
-    return .{ PAD, panelY() };
-}
-
-fn stoneIconPos() [2]f32 {
-    return .{ PAD, panelY() + ROW_H };
-}
-
 // ── Draw ──────────────────────────────────────────────────────────────────────
 
 pub fn draw() void {
-    const py = panelY();
+    const num_rows: f32 = if (has_key) 3.0 else 2.0;
+    const py = @as(f32, @floatFromInt(rl.getScreenHeight())) - PAD - ROW_H * num_rows - 6;
 
     // Background panel
     rl.drawRectangleRounded(
-        .{ .x = PAD - 4, .y = py - 4, .width = 72, .height = ROW_H * 2 + 10 },
+        .{ .x = PAD - 4, .y = py - 4, .width = 72, .height = ROW_H * num_rows + 10 },
         0.3,
         4,
         rl.Color.init(0, 0, 0, 110),
     );
 
+    var cur_y = py;
+
+    // Key row (topmost when held)
+    if (has_key) {
+        drawMiniKey(
+            @intFromFloat(PAD + ICON_W * 0.5),
+            @intFromFloat(cur_y + ROW_H * 0.5),
+        );
+        rl.drawText("Key", @intFromFloat(PAD + ICON_W + 2), @intFromFloat(cur_y + 4), 14, rl.Color.init(230, 195, 50, 255));
+        cur_y += ROW_H;
+    }
+
     // Wood row
     {
-        const pos = woodIconPos();
-        drawMiniTree(@intFromFloat(pos[0] + ICON_W * 0.5), @intFromFloat(pos[1] + ROW_H * 0.5 - 1));
+        drawMiniTree(@intFromFloat(PAD + ICON_W * 0.5), @intFromFloat(cur_y + ROW_H * 0.5 - 1));
         var buf: [16:0]u8 = undefined;
         const s = std.fmt.bufPrintZ(&buf, "{d}", .{wood}) catch "?";
-        rl.drawText(s, @intFromFloat(pos[0] + ICON_W + 2), @intFromFloat(pos[1] + 4), 14, rl.Color.init(230, 210, 160, 255));
+        rl.drawText(s, @intFromFloat(PAD + ICON_W + 2), @intFromFloat(cur_y + 4), 14, rl.Color.init(230, 210, 160, 255));
+        cur_y += ROW_H;
     }
 
     // Stone row
     {
-        const pos = stoneIconPos();
-        drawMiniRock(@intFromFloat(pos[0] + ICON_W * 0.5), @intFromFloat(pos[1] + ROW_H * 0.5 + 1));
+        drawMiniRock(@intFromFloat(PAD + ICON_W * 0.5), @intFromFloat(cur_y + ROW_H * 0.5 + 1));
         var buf: [16:0]u8 = undefined;
         const s = std.fmt.bufPrintZ(&buf, "{d}", .{stone}) catch "?";
-        rl.drawText(s, @intFromFloat(pos[0] + ICON_W + 2), @intFromFloat(pos[1] + 4), 14, rl.Color.init(190, 185, 175, 255));
+        rl.drawText(s, @intFromFloat(PAD + ICON_W + 2), @intFromFloat(cur_y + 4), 14, rl.Color.init(190, 185, 175, 255));
     }
 }
 
@@ -134,4 +135,19 @@ fn drawMiniRock(cx: i32, cy: i32) void {
     rl.drawEllipse(cx, cy, 7, 5, rl.Color.init(110, 105, 100, 255));
     rl.drawEllipse(cx + 1, cy - 1, 4, 3, rl.Color.init(138, 132, 125, 255));
     rl.drawEllipse(cx - 1, cy - 2, 2, 1, rl.Color.init(175, 170, 163, 255));
+}
+
+fn drawMiniKey(cx: i32, cy: i32) void {
+    const GOLD = rl.Color.init(210, 175, 40, 255);
+    const GOLD_DARK = rl.Color.init(145, 115, 20, 255);
+    // Handle ring
+    rl.drawCircle(cx - 4, cy - 0, 4, GOLD_DARK);
+    rl.drawCircle(cx - 4, cy - 0, 3, GOLD);
+    rl.drawCircle(cx - 4, cy - 0, 1, rl.Color.init(20, 18, 12, 255));
+    // Shaft
+    rl.drawRectangle(cx - 3, cy - 1, 10, 2, GOLD_DARK);
+    rl.drawRectangle(cx - 2, cy + 0, 8, 1, GOLD);
+    // Teeth
+    rl.drawRectangle(cx + 3, cy + 1, 2, 2, GOLD_DARK);
+    rl.drawRectangle(cx + 6, cy + 1, 2, 1, GOLD_DARK);
 }
